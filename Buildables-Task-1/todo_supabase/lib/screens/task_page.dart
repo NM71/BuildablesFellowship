@@ -18,8 +18,15 @@ class _TaskPageState extends State<TaskPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        title: const Text("Add New Task"),
         content: TextField(controller: textController),
         actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: const Text("Cancel"),
+          ),
           TextButton(
             onPressed: () {
               saveTask();
@@ -64,8 +71,15 @@ class _TaskPageState extends State<TaskPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        title: const Text("Update Task"),
         content: TextField(controller: textController..text = currentName),
         actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: const Text("Cancel"),
+          ),
           TextButton(
             onPressed: () {
               updateTask(id, textController.text);
