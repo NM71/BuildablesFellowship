@@ -12,9 +12,6 @@ class TaskPage extends StatefulWidget {
 class _TaskPageState extends State<TaskPage> {
   // Basic CRUD Operations
 
-  /*
-  CREATE: Add a new task
-  */
   final textController = TextEditingController();
 
   void addNewTask() {
@@ -23,7 +20,6 @@ class _TaskPageState extends State<TaskPage> {
       builder: (context) => AlertDialog(
         content: TextField(controller: textController),
         actions: [
-          // save button
           TextButton(
             onPressed: () {
               saveTask();
@@ -55,35 +51,86 @@ class _TaskPageState extends State<TaskPage> {
   /*
   READ: Fetch all tasks
   */
-
-  final Stream<List<Map<String, dynamic>>> _tasksStream = Supabase
-      .instance
-      .client
+  final _tasksStream = Supabase.instance.client
       .from('todo')
       .stream(primaryKey: ['id'])
-      .order('id', ascending: true);
+      .order('id', ascending: true)
+      .map((rows) => rows.cast<Map<String, dynamic>>());
 
   /*
   UPDATE: Update an existing task
   */
+  void updateExistingTask(int id, String currentName) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        content: TextField(controller: textController..text = currentName),
+        actions: [
+          TextButton(
+            onPressed: () {
+              updateTask(id, textController.text);
+              Navigator.pop(context);
+            },
+            child: const Text("Update"),
+          ),
+        ],
+      ),
+    );
+  }
 
-  /*
-  DELETE: Remove a task
-  */
-  void deleteTask(int id) async {
-    await Supabase.instance.client.from('todo').delete().eq('id', id);
+  void updateTask(int id, String newName) async {
+    await Supabase.instance.client
+        .from('todo')
+        .update({'name': newName})
+        .eq('id', id);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: const Center(child: Text('Task deleted'))),
+        SnackBar(content: Center(child: Text('Task updated to: $newName'))),
       );
+    }
+  }
+
+  /*
+  DELETE: Remove a task with confirmation
+  */
+  Future<void> confirmAndDelete(int id, String taskName) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Delete Task"),
+        content: Text("Are you sure you want to delete \"$taskName\"?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete == true) {
+      await deleteTask(id, taskName);
+    }
+  }
+
+  Future<void> deleteTask(int id, String taskName) async {
+    await Supabase.instance.client.from('todo').delete().eq('id', id);
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Task deleted: $taskName')));
     }
   }
 
   // dispose of controllers
   @override
   void dispose() {
-    super.dispose();
     textController.dispose();
+    super.dispose();
   }
 
   @override
@@ -92,20 +139,15 @@ class _TaskPageState extends State<TaskPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // custom appbar
             CustomAppbar(),
-
-            // body content fills the rest
             Expanded(
               child: StreamBuilder<List<Map<String, dynamic>>>(
                 stream: _tasksStream,
                 builder: (context, snapshot) {
-                  // loading...
                   if (!snapshot.hasData) {
                     return const Center(child: CircularProgressIndicator());
                   }
 
-                  // if no task found
                   if (snapshot.data!.isEmpty) {
                     return const Center(
                       child: Column(
@@ -126,7 +168,6 @@ class _TaskPageState extends State<TaskPage> {
                     );
                   }
 
-                  // loaded
                   final tasks = snapshot.data!;
 
                   return ListView.builder(
@@ -137,6 +178,12 @@ class _TaskPageState extends State<TaskPage> {
                       final taskName = task['name'];
 
                       return Dismissible(
+                        key: Key(task['id'].toString()),
+                        direction: DismissDirection.endToStart,
+                        confirmDismiss: (direction) async {
+                          await confirmAndDelete(task['id'] as int, taskName);
+                          return false;
+                        },
                         background: Container(
                           color: const Color(0xffe3664d),
                           alignment: Alignment.centerRight,
@@ -147,14 +194,6 @@ class _TaskPageState extends State<TaskPage> {
                             size: 30,
                           ),
                         ),
-                        key: Key(task['id'].toString()),
-                        direction: DismissDirection.endToStart,
-                        onDismissed: (direction) {
-                          deleteTask(task['id'] as int);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Task deleted: $taskName')),
-                          );
-                        },
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
@@ -175,14 +214,35 @@ class _TaskPageState extends State<TaskPage> {
                                 color: Theme.of(context).colorScheme.onPrimary,
                               ),
                             ),
-                            trailing: IconButton(
-                              onPressed: () {
-                                deleteTask(task['id'] as int);
-                              },
-                              icon: const Icon(
-                                Icons.delete,
-                                color: Color(0xffe3664d),
-                              ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  onPressed: () {
+                                    updateExistingTask(
+                                      task['id'] as int,
+                                      taskName,
+                                    );
+                                  },
+                                  icon: const Icon(
+                                    Icons.edit_outlined,
+                                    color: Color(0xff38b17d),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                IconButton(
+                                  onPressed: () {
+                                    confirmAndDelete(
+                                      task['id'] as int,
+                                      taskName,
+                                    );
+                                  },
+                                  icon: const Icon(
+                                    Icons.delete,
+                                    color: Color(0xffe3664d),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -196,8 +256,10 @@ class _TaskPageState extends State<TaskPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
         onPressed: addNewTask,
-        child: const Icon(Icons.add),
+        child: const Icon(Icons.create_outlined),
       ),
     );
   }

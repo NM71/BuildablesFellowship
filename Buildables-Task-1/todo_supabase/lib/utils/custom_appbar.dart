@@ -16,15 +16,15 @@ class CustomAppbar extends StatelessWidget {
             children: [
               SvgPicture.asset(
                 'assets/images/supabase-logo.svg',
-                width: 30,
-                height: 30,
+                width: 25,
+                height: 25,
                 fit: BoxFit.cover,
               ),
               const SizedBox(width: 20),
               Text(
                 'T O D O ',
                 style: TextStyle(
-                  fontSize: 20,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: ColorScheme.of(context).primary,
                 ),
