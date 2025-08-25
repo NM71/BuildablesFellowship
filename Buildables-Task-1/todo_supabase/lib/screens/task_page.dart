@@ -10,39 +10,65 @@ class TaskPage extends StatefulWidget {
 }
 
 class _TaskPageState extends State<TaskPage> {
-  // Basic CRUD Operations
-
   final textController = TextEditingController();
+  final descController = TextEditingController();
 
+  /* 
+  CRUD Operations
+  */
+
+  // add a new task
   void addNewTask() {
+    textController.clear();
+    descController.clear();
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Add New Task"),
-        content: TextField(controller: textController),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: textController,
+              decoration: const InputDecoration(labelText: "Task name"),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: descController,
+              decoration: const InputDecoration(
+                labelText: "Description (optional)",
+              ),
+              maxLines: 2,
+            ),
+          ],
+        ),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-            },
+            onPressed: () => Navigator.pop(context),
             child: const Text("Cancel"),
           ),
-          TextButton(
-            onPressed: () {
-              saveTask();
-            },
-            child: const Text("Save"),
-          ),
+          TextButton(onPressed: () => saveTask(), child: const Text("Save")),
         ],
       ),
     );
   }
 
-  // Save task in db
-  void saveTask() async {
+  Future<void> saveTask() async {
+    if (textController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Task name cannot be empty")),
+      );
+      return;
+    }
+
     await Supabase.instance.client.from('todo').insert({
-      'name': textController.text,
+      'name': textController.text.trim(),
+      'description': descController.text.trim().isNotEmpty
+          ? descController.text.trim()
+          : null,
     });
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -50,40 +76,60 @@ class _TaskPageState extends State<TaskPage> {
         ),
       );
       textController.clear();
+      descController.clear();
+      Navigator.pop(context);
     }
-    if (!mounted) return;
-    Navigator.pop(context);
   }
 
-  /*
-  READ: Fetch all tasks
-  */
+  // Fetching all tasks
   final _tasksStream = Supabase.instance.client
       .from('todo')
       .stream(primaryKey: ['id'])
-      .order('id', ascending: true)
+      .order('created_at', ascending: false)
       .map((rows) => rows.cast<Map<String, dynamic>>());
 
-  /*
-  UPDATE: Update an existing task
-  */
-  void updateExistingTask(int id, String currentName) {
+  void updateExistingTask(int id, String currentName, String? currentDesc) {
+    textController.text = currentName;
+    descController.text = currentDesc ?? "";
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Update Task"),
-        content: TextField(controller: textController..text = currentName),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: textController,
+              decoration: const InputDecoration(labelText: "Task name"),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: descController,
+              decoration: const InputDecoration(labelText: "Description"),
+              maxLines: 2,
+            ),
+          ],
+        ),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-            },
+            onPressed: () => Navigator.pop(context),
             child: const Text("Cancel"),
           ),
           TextButton(
-            onPressed: () {
-              updateTask(id, textController.text);
-              Navigator.pop(context);
+            onPressed: () async {
+              if (textController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Task name cannot be empty")),
+                );
+                return;
+              }
+              await updateTask(
+                id,
+                textController.text.trim(),
+                descController.text.trim(),
+              );
+              if (mounted) Navigator.pop(context);
             },
             child: const Text("Update"),
           ),
@@ -92,11 +138,15 @@ class _TaskPageState extends State<TaskPage> {
     );
   }
 
-  void updateTask(int id, String newName) async {
+  Future<void> updateTask(int id, String newName, String newDesc) async {
     await Supabase.instance.client
         .from('todo')
-        .update({'name': newName})
+        .update({
+          'name': newName,
+          'description': newDesc.isNotEmpty ? newDesc : null,
+        })
         .eq('id', id);
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Center(child: Text('Task updated to: $newName'))),
@@ -104,9 +154,6 @@ class _TaskPageState extends State<TaskPage> {
     }
   }
 
-  /*
-  DELETE: Remove a task with confirmation
-  */
   Future<void> confirmAndDelete(int id, String taskName) async {
     final shouldDelete = await showDialog<bool>(
       context: context,
@@ -131,6 +178,7 @@ class _TaskPageState extends State<TaskPage> {
     }
   }
 
+  // deleting task
   Future<void> deleteTask(int id, String taskName) async {
     await Supabase.instance.client.from('todo').delete().eq('id', id);
     if (mounted) {
@@ -140,10 +188,10 @@ class _TaskPageState extends State<TaskPage> {
     }
   }
 
-  // dispose of controllers
   @override
   void dispose() {
     textController.dispose();
+    descController.dispose();
     super.dispose();
   }
 
@@ -189,7 +237,8 @@ class _TaskPageState extends State<TaskPage> {
                     itemCount: tasks.length,
                     itemBuilder: (context, index) {
                       final task = tasks[index];
-                      final taskName = task['name'];
+                      final taskName = task['name'] ?? "";
+                      final taskDesc = task['description'] ?? "";
 
                       return Dismissible(
                         key: Key(task['id'].toString()),
@@ -199,11 +248,18 @@ class _TaskPageState extends State<TaskPage> {
                           return false;
                         },
                         background: Container(
-                          color: const Color(0xffe3664d),
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(6),
+                            color: const Color(0xffe3664d),
+                          ),
                           alignment: Alignment.centerRight,
                           padding: const EdgeInsets.only(right: 20),
                           child: const Icon(
-                            Icons.delete,
+                            Icons.delete_outline,
                             color: Colors.white,
                             size: 30,
                           ),
@@ -226,37 +282,32 @@ class _TaskPageState extends State<TaskPage> {
                               taskName,
                               style: TextStyle(
                                 color: Theme.of(context).colorScheme.onPrimary,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  onPressed: () {
-                                    updateExistingTask(
-                                      task['id'] as int,
-                                      taskName,
-                                    );
-                                  },
-                                  icon: const Icon(
-                                    Icons.edit_outlined,
-                                    color: Color(0xff38b17d),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                IconButton(
-                                  onPressed: () {
-                                    confirmAndDelete(
-                                      task['id'] as int,
-                                      taskName,
-                                    );
-                                  },
-                                  icon: const Icon(
-                                    Icons.delete,
-                                    color: Color(0xffe3664d),
-                                  ),
-                                ),
-                              ],
+                            subtitle: taskDesc.isNotEmpty
+                                ? Text(
+                                    taskDesc,
+                                    style: TextStyle(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onPrimary
+                                          .withValues(alpha: 0.7),
+                                    ),
+                                  )
+                                : null,
+                            trailing: IconButton(
+                              onPressed: () {
+                                updateExistingTask(
+                                  task['id'] as int,
+                                  taskName,
+                                  taskDesc,
+                                );
+                              },
+                              icon: const Icon(
+                                Icons.edit_outlined,
+                                color: Color(0xff38b17d),
+                              ),
                             ),
                           ),
                         ),
