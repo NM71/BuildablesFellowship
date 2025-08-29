@@ -56,12 +56,14 @@ enum TaskOperation { create, update, delete, toggle }
 class TaskState {
   final List<Task> tasks;
   final bool isLoading;
+  final bool isRefreshing;
   final TaskOperation? currentOperation;
   final String? error;
 
   TaskState({
     this.tasks = const [],
     this.isLoading = false,
+    this.isRefreshing = false,
     this.currentOperation,
     this.error,
   });
@@ -69,12 +71,14 @@ class TaskState {
   TaskState copyWith({
     List<Task>? tasks,
     bool? isLoading,
+    bool? isRefreshing,
     TaskOperation? currentOperation,
     String? error,
   }) {
     return TaskState(
       tasks: tasks ?? this.tasks,
       isLoading: isLoading ?? this.isLoading,
+      isRefreshing: isRefreshing ?? this.isRefreshing,
       currentOperation: currentOperation ?? this.currentOperation,
       error: error ?? this.error,
     );
@@ -104,13 +108,14 @@ class TaskNotifier extends StateNotifier<TaskState> {
             (data) {
               if (!_mounted) return; // Check if disposed
               final tasks = data.map((json) => Task.fromJson(json)).toList();
-              state = state.copyWith(tasks: tasks);
+              state = state.copyWith(tasks: tasks, isLoading: false);
             },
             onError: (error) {
               if (kDebugMode) {
                 print('Realtime subscription error: $error');
               }
               // Don't update state on error to avoid breaking the UI
+              state = state.copyWith(isLoading: false);
             },
           );
     } catch (e) {
@@ -118,10 +123,12 @@ class TaskNotifier extends StateNotifier<TaskState> {
         print('Failed to set up realtime subscription: $e');
       }
       // Continue without realtime updates
+      state = state.copyWith(isLoading: false);
     }
   }
 
   Future<void> _fetchTasks() async {
+    state = state.copyWith(isLoading: true, error: null);
     try {
       final response = await _supabase
           .from('todo')
@@ -129,14 +136,30 @@ class TaskNotifier extends StateNotifier<TaskState> {
           .order('created_at', ascending: false);
 
       final tasks = response.map((json) => Task.fromJson(json)).toList();
-      state = state.copyWith(tasks: tasks);
+      state = state.copyWith(tasks: tasks, isLoading: false);
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(error: e.toString(), isLoading: false);
+    }
+  }
+
+  // Refresh tasks manually
+  Future<void> refreshTasks() async {
+    state = state.copyWith(isRefreshing: true, error: null);
+    try {
+      final response = await _supabase
+          .from('todo')
+          .select()
+          .order('created_at', ascending: false);
+
+      final tasks = response.map((json) => Task.fromJson(json)).toList();
+      state = state.copyWith(tasks: tasks, isRefreshing: false);
+    } catch (e) {
+      state = state.copyWith(error: e.toString(), isRefreshing: false);
     }
   }
 
   // Create task
-  Future<void> createTask({
+  Future<String> createTask({
     required String name,
     String? description,
     required String category,
@@ -166,17 +189,19 @@ class TaskNotifier extends StateNotifier<TaskState> {
         isLoading: false,
         currentOperation: null,
       );
+      return 'Task "${newTask.name}" added successfully';
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
         currentOperation: null,
         error: e.toString(),
       );
+      return 'Failed to add task: ${e.toString()}';
     }
   }
 
   // Update task
-  Future<void> updateTask({
+  Future<String> updateTask({
     required int id,
     required String name,
     String? description,
@@ -218,17 +243,19 @@ class TaskNotifier extends StateNotifier<TaskState> {
         isLoading: false,
         currentOperation: null,
       );
+      return 'Task updated to "$name"';
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
         currentOperation: null,
         error: e.toString(),
       );
+      return 'Failed to update task: ${e.toString()}';
     }
   }
 
   // Toggle completion
-  Future<void> toggleTaskCompletion(int id, bool completed) async {
+  Future<String> toggleTaskCompletion(int id, bool completed) async {
     state = state.copyWith(
       isLoading: true,
       currentOperation: TaskOperation.toggle,
@@ -250,17 +277,23 @@ class TaskNotifier extends StateNotifier<TaskState> {
         isLoading: false,
         currentOperation: null,
       );
+      return completed ? 'Task marked as completed' : 'Task marked as pending';
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
         currentOperation: null,
         error: e.toString(),
       );
+      return 'Failed to update task: ${e.toString()}';
     }
   }
 
   // Delete task
-  Future<void> deleteTask(int id) async {
+  Future<String> deleteTask(int id) async {
+    // Find task name for feedback
+    final taskToDelete = state.tasks.firstWhere((task) => task.id == id);
+    final taskName = taskToDelete.name;
+
     state = state.copyWith(
       isLoading: true,
       currentOperation: TaskOperation.delete,
@@ -276,12 +309,14 @@ class TaskNotifier extends StateNotifier<TaskState> {
         isLoading: false,
         currentOperation: null,
       );
+      return 'Task "$taskName" deleted successfully';
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
         currentOperation: null,
         error: e.toString(),
       );
+      return 'Failed to delete task: ${e.toString()}';
     }
   }
 
@@ -327,4 +362,10 @@ final isDeletingTaskProvider = Provider<bool>((ref) {
 final isTogglingTaskProvider = Provider<bool>((ref) {
   final state = ref.watch(taskProvider);
   return state.isLoading && state.currentOperation == TaskOperation.toggle;
+});
+
+// Refresh provider
+final isRefreshingTasksProvider = Provider<bool>((ref) {
+  final state = ref.watch(taskProvider);
+  return state.isRefreshing;
 });

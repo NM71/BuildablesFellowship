@@ -110,35 +110,33 @@ class _TaskPageState extends ConsumerState<TaskPage> {
       return;
     }
 
-    try {
-      await ref
-          .read(taskProvider.notifier)
-          .createTask(
-            name: textController.text.trim(),
-            description: descController.text.trim().isNotEmpty
-                ? descController.text.trim()
-                : null,
-            category: categoryController.text.trim().isNotEmpty
-                ? categoryController.text.trim()
-                : 'Other',
-          );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Center(child: Text('Task added: ${textController.text}')),
-          ),
+    final message = await ref
+        .read(taskProvider.notifier)
+        .createTask(
+          name: textController.text.trim(),
+          description: descController.text.trim().isNotEmpty
+              ? descController.text.trim()
+              : null,
+          category: categoryController.text.trim().isNotEmpty
+              ? categoryController.text.trim()
+              : 'Other',
         );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Center(child: Text(message)),
+          action: message.contains('Failed')
+              ? SnackBarAction(label: 'Retry', onPressed: () => saveTask(ref))
+              : null,
+        ),
+      );
+
+      if (!message.contains('Failed')) {
         textController.clear();
         descController.clear();
         categoryController.clear();
         Navigator.pop(context);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error creating task: $e')));
       }
     }
   }
@@ -234,36 +232,35 @@ class _TaskPageState extends ConsumerState<TaskPage> {
       return;
     }
 
-    try {
-      await ref
-          .read(taskProvider.notifier)
-          .updateTask(
-            id: id,
-            name: textController.text.trim(),
-            description: descController.text.trim().isNotEmpty
-                ? descController.text.trim()
-                : null,
-            category: categoryController.text.trim().isNotEmpty
-                ? categoryController.text.trim()
-                : 'Other',
-            completed: isCompleted,
-          );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Center(
-              child: Text('Task updated to: ${textController.text}'),
-            ),
-          ),
+    final message = await ref
+        .read(taskProvider.notifier)
+        .updateTask(
+          id: id,
+          name: textController.text.trim(),
+          description: descController.text.trim().isNotEmpty
+              ? descController.text.trim()
+              : null,
+          category: categoryController.text.trim().isNotEmpty
+              ? categoryController.text.trim()
+              : 'Other',
+          completed: isCompleted,
         );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Center(child: Text(message)),
+          action: message.contains('Failed')
+              ? SnackBarAction(
+                  label: 'Retry',
+                  onPressed: () => updateTask(ref, id),
+                )
+              : null,
+        ),
+      );
+
+      if (!message.contains('Failed')) {
         Navigator.pop(context);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error updating task: $e')));
       }
     }
   }
@@ -293,19 +290,20 @@ class _TaskPageState extends ConsumerState<TaskPage> {
   }
 
   Future<void> deleteTask(int id, String taskName) async {
-    try {
-      await ref.read(taskProvider.notifier).deleteTask(id);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Task deleted: $taskName')));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error deleting task: $e')));
-      }
+    final message = await ref.read(taskProvider.notifier).deleteTask(id);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          action: message.contains('Failed')
+              ? SnackBarAction(
+                  label: 'Retry',
+                  onPressed: () => deleteTask(id, taskName),
+                )
+              : null,
+        ),
+      );
     }
   }
 
@@ -348,6 +346,8 @@ class _TaskPageState extends ConsumerState<TaskPage> {
                             ],
                           ),
                         )
+                      : taskState.isLoading
+                      ? const Center(child: CircularProgressIndicator())
                       : tasks.isEmpty
                       ? const Center(
                           child: Column(

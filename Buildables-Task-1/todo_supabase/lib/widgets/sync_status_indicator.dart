@@ -13,13 +13,13 @@ class SyncStatusIndicator extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: isOnline
-            ? Colors.green.withOpacity(0.1)
-            : Colors.red.withOpacity(0.1),
+            ? Colors.green.withValues(alpha: 0.1)
+            : Colors.red.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isOnline
-              ? Colors.green.withOpacity(0.3)
-              : Colors.red.withOpacity(0.3),
+              ? Colors.green.withValues(alpha: 0.3)
+              : Colors.red.withValues(alpha: 0.3),
           width: 1,
         ),
       ),
@@ -32,17 +32,17 @@ class SyncStatusIndicator extends ConsumerWidget {
             size: 16,
             color: isOnline ? Colors.green : Colors.red,
           ),
-          const SizedBox(width: 6),
+          // const SizedBox(width: 6),
 
           // Status Text
-          Text(
-            isOnline ? 'Online' : 'Offline',
-            style: TextStyle(
-              color: isOnline ? Colors.green : Colors.red,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          // Text(
+          //   isOnline ? 'Online' : 'Offline',
+          //   style: TextStyle(
+          //     color: isOnline ? Colors.green : Colors.red,
+          //     fontSize: 12,
+          //     fontWeight: FontWeight.w500,
+          //   ),
+          // ),
         ],
       ),
     );
