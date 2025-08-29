@@ -18,6 +18,7 @@ class _TaskPageState extends State<TaskPage> {
   */
 
   // add a new task
+
   void addNewTask() {
     textController.clear();
     descController.clear();
