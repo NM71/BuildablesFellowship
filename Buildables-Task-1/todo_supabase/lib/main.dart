@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:todo_supabase/screens/task_page.dart';
 
 void main() async {
   // supabase setup
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
   await Supabase.initialize(
-    url: "https://nxbxxjohqxpfgnvhjgkj.supabase.co",
-    anonKey:
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54Ynh4am9ocXhwZmdudmhqZ2tqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU2NjQxMjAsImV4cCI6MjA3MTI0MDEyMH0.z5iyGC9xiNL_OjbNWIv1Xz1XJ7tslWSsBWQ8BpOGy48",
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
   // run app
-  runApp(MyApp());
+  runApp(const ProviderScope(child: MyApp()));
 }
 
 class MyApp extends StatelessWidget {

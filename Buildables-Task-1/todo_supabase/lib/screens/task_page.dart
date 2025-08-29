@@ -1,61 +1,108 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:todo_supabase/providers/task_provider.dart';
 import 'package:todo_supabase/utils/custom_appbar.dart';
 
-class TaskPage extends StatefulWidget {
+class TaskPage extends ConsumerStatefulWidget {
   const TaskPage({super.key});
 
   @override
-  State<TaskPage> createState() => _TaskPageState();
+  ConsumerState<TaskPage> createState() => _TaskPageState();
 }
 
-class _TaskPageState extends State<TaskPage> {
+class _TaskPageState extends ConsumerState<TaskPage> {
   final textController = TextEditingController();
   final descController = TextEditingController();
+  final categoryController = TextEditingController();
+  bool isCompleted = false;
 
-  /* 
-  CRUD Operations
-  */
+  // Predefined categories
+  final List<String> categories = [
+    'Personal',
+    'Work',
+    'Shopping',
+    'Health',
+    'Education',
+    'Other',
+  ];
 
-  // add a new task
+  @override
+  void dispose() {
+    textController.dispose();
+    descController.dispose();
+    categoryController.dispose();
+    super.dispose();
+  }
 
   void addNewTask() {
     textController.clear();
     descController.clear();
+    categoryController.clear();
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Add New Task"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: textController,
-              decoration: const InputDecoration(labelText: "Task name"),
+      builder: (context) => Consumer(
+        builder: (context, ref, child) {
+          final isCreating = ref.watch(isCreatingTaskProvider);
+
+          return AlertDialog(
+            title: const Text("Add New Task"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: textController,
+                  decoration: const InputDecoration(labelText: "Task name"),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: descController,
+                  decoration: const InputDecoration(
+                    labelText: "Description (optional)",
+                  ),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  value: categoryController.text.isEmpty
+                      ? null
+                      : categoryController.text,
+                  decoration: const InputDecoration(labelText: "Category"),
+                  items: categories.map((category) {
+                    return DropdownMenuItem(
+                      value: category,
+                      child: Text(category),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    categoryController.text = value ?? '';
+                  },
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: descController,
-              decoration: const InputDecoration(
-                labelText: "Description (optional)",
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Cancel"),
               ),
-              maxLines: 2,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          TextButton(onPressed: () => saveTask(), child: const Text("Save")),
-        ],
+              TextButton(
+                onPressed: isCreating ? null : () => saveTask(ref),
+                child: isCreating
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text("Save"),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Future<void> saveTask() async {
+  Future<void> saveTask(WidgetRef ref) async {
     if (textController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Task name cannot be empty")),
@@ -63,95 +110,161 @@ class _TaskPageState extends State<TaskPage> {
       return;
     }
 
-    await Supabase.instance.client.from('todo').insert({
-      'name': textController.text.trim(),
-      'description': descController.text.trim().isNotEmpty
-          ? descController.text.trim()
-          : null,
-    });
+    try {
+      await ref
+          .read(taskProvider.notifier)
+          .createTask(
+            name: textController.text.trim(),
+            description: descController.text.trim().isNotEmpty
+                ? descController.text.trim()
+                : null,
+            category: categoryController.text.trim().isNotEmpty
+                ? categoryController.text.trim()
+                : 'Other',
+          );
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Center(child: Text('Task added: ${textController.text}')),
-        ),
-      );
-      textController.clear();
-      descController.clear();
-      Navigator.pop(context);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Center(child: Text('Task added: ${textController.text}')),
+          ),
+        );
+        textController.clear();
+        descController.clear();
+        categoryController.clear();
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error creating task: $e')));
+      }
     }
   }
 
-  // Fetching all tasks
-  final _tasksStream = Supabase.instance.client
-      .from('todo')
-      .stream(primaryKey: ['id'])
-      .order('created_at', ascending: false)
-      .map((rows) => rows.cast<Map<String, dynamic>>());
-
-  void updateExistingTask(int id, String currentName, String? currentDesc) {
-    textController.text = currentName;
-    descController.text = currentDesc ?? "";
+  void updateExistingTask(Task task) {
+    textController.text = task.name;
+    descController.text = task.description ?? "";
+    categoryController.text = task.category;
+    isCompleted = task.completed;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Update Task"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: textController,
-              decoration: const InputDecoration(labelText: "Task name"),
+      builder: (context) => Consumer(
+        builder: (context, ref, child) {
+          final isUpdating = ref.watch(isUpdatingTaskProvider);
+
+          return AlertDialog(
+            title: const Text("Update Task"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: textController,
+                  decoration: const InputDecoration(labelText: "Task name"),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: descController,
+                  decoration: const InputDecoration(labelText: "Description"),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  value: categoryController.text.isEmpty
+                      ? null
+                      : categoryController.text,
+                  decoration: const InputDecoration(labelText: "Category"),
+                  items: categories.map((category) {
+                    return DropdownMenuItem(
+                      value: category,
+                      child: Text(category),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    categoryController.text = value ?? '';
+                  },
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Text("Completed:"),
+                    const SizedBox(width: 10),
+                    Switch(
+                      value: isCompleted,
+                      onChanged: (value) {
+                        setState(() {
+                          isCompleted = value;
+                        });
+                      },
+                      activeColor: Theme.of(context).colorScheme.primary,
+                    ),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: descController,
-              decoration: const InputDecoration(labelText: "Description"),
-              maxLines: 2,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          TextButton(
-            onPressed: () async {
-              if (textController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Task name cannot be empty")),
-                );
-                return;
-              }
-              await updateTask(
-                id,
-                textController.text.trim(),
-                descController.text.trim(),
-              );
-              if (mounted) Navigator.pop(context);
-            },
-            child: const Text("Update"),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Cancel"),
+              ),
+              TextButton(
+                onPressed: isUpdating ? null : () => updateTask(ref, task.id),
+                child: isUpdating
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text("Update"),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Future<void> updateTask(int id, String newName, String newDesc) async {
-    await Supabase.instance.client
-        .from('todo')
-        .update({
-          'name': newName,
-          'description': newDesc.isNotEmpty ? newDesc : null,
-        })
-        .eq('id', id);
-
-    if (mounted) {
+  Future<void> updateTask(WidgetRef ref, int id) async {
+    if (textController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Center(child: Text('Task updated to: $newName'))),
+        const SnackBar(content: Text("Task name cannot be empty")),
       );
+      return;
+    }
+
+    try {
+      await ref
+          .read(taskProvider.notifier)
+          .updateTask(
+            id: id,
+            name: textController.text.trim(),
+            description: descController.text.trim().isNotEmpty
+                ? descController.text.trim()
+                : null,
+            category: categoryController.text.trim().isNotEmpty
+                ? categoryController.text.trim()
+                : 'Other',
+            completed: isCompleted,
+          );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Center(
+              child: Text('Task updated to: ${textController.text}'),
+            ),
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error updating task: $e')));
+      }
     }
   }
 
@@ -179,154 +292,297 @@ class _TaskPageState extends State<TaskPage> {
     }
   }
 
-  // deleting task
   Future<void> deleteTask(int id, String taskName) async {
-    await Supabase.instance.client.from('todo').delete().eq('id', id);
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Task deleted: $taskName')));
+    try {
+      await ref.read(taskProvider.notifier).deleteTask(id);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Task deleted: $taskName')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error deleting task: $e')));
+      }
     }
   }
 
   @override
-  void dispose() {
-    textController.dispose();
-    descController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            CustomAppbar(),
-            Expanded(
-              child: StreamBuilder<List<Map<String, dynamic>>>(
-                stream: _tasksStream,
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+    return Consumer(
+      builder: (context, ref, child) {
+        final taskState = ref.watch(taskProvider);
+        final tasks = taskState.tasks;
 
-                  if (snapshot.data!.isEmpty) {
-                    return const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.task_alt_outlined,
-                            size: 60,
-                            color: Colors.white,
-                          ),
-                          SizedBox(height: 20),
-                          Text(
-                            'No tasks found',
-                            style: TextStyle(color: Colors.white),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-
-                  final tasks = snapshot.data!;
-
-                  return ListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    itemCount: tasks.length,
-                    itemBuilder: (context, index) {
-                      final task = tasks[index];
-                      final taskName = task['name'] ?? "";
-                      final taskDesc = task['description'] ?? "";
-
-                      return Dismissible(
-                        key: Key(task['id'].toString()),
-                        direction: DismissDirection.endToStart,
-                        confirmDismiss: (direction) async {
-                          await confirmAndDelete(task['id'] as int, taskName);
-                          return false;
-                        },
-                        background: Container(
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(6),
-                            color: const Color(0xffe3664d),
-                          ),
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 20),
-                          child: const Icon(
-                            Icons.delete_outline,
-                            color: Colors.white,
-                            size: 30,
-                          ),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 6,
-                          ),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.all(15),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(6),
-                              side: BorderSide(
-                                color: Theme.of(context).colorScheme.primary,
-                                width: 0.5,
+        return Scaffold(
+          body: SafeArea(
+            child: Column(
+              children: [
+                const CustomAppbar(),
+                Expanded(
+                  child: taskState.error != null
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.error_outline,
+                                size: 60,
+                                color: Colors.red,
                               ),
-                            ),
-                            title: Text(
-                              taskName,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.onPrimary,
-                                fontWeight: FontWeight.bold,
+                              const SizedBox(height: 20),
+                              Text(
+                                'Error: ${taskState.error}',
+                                style: const TextStyle(color: Colors.red),
+                                textAlign: TextAlign.center,
                               ),
-                            ),
-                            subtitle: taskDesc.isNotEmpty
-                                ? Text(
-                                    taskDesc,
-                                    style: TextStyle(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onPrimary
-                                          .withValues(alpha: 0.7),
+                              const SizedBox(height: 20),
+                              ElevatedButton(
+                                onPressed: () {
+                                  ref.invalidate(taskProvider);
+                                },
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        )
+                      : tasks.isEmpty
+                      ? const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.task_alt_outlined,
+                                size: 60,
+                                color: Colors.white,
+                              ),
+                              SizedBox(height: 20),
+                              Text(
+                                'No tasks found',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          itemCount: tasks.length,
+                          itemBuilder: (context, index) {
+                            final task = tasks[index];
+                            final taskName = task.name;
+                            final taskDesc = task.description ?? "";
+                            final taskCategory = task.category;
+                            final isTaskCompleted = task.completed;
+
+                            return Consumer(
+                              builder: (context, ref, child) {
+                                final isDeleting = ref.watch(
+                                  isDeletingTaskProvider,
+                                );
+                                return Dismissible(
+                                  key: Key(task.id.toString()),
+                                  direction: DismissDirection.endToStart,
+                                  confirmDismiss: (direction) async {
+                                    if (isDeleting) return false;
+                                    await confirmAndDelete(task.id, taskName);
+                                    return false;
+                                  },
+                                  background: Container(
+                                    margin: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 6,
                                     ),
-                                  )
-                                : null,
-                            trailing: IconButton(
-                              onPressed: () {
-                                updateExistingTask(
-                                  task['id'] as int,
-                                  taskName,
-                                  taskDesc,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(6),
+                                      color: isDeleting
+                                          ? Colors.grey
+                                          : const Color(0xffe3664d),
+                                    ),
+                                    alignment: Alignment.centerRight,
+                                    padding: const EdgeInsets.only(right: 20),
+                                    child: isDeleting
+                                        ? const SizedBox(
+                                            width: 24,
+                                            height: 24,
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.delete_outline,
+                                            color: Colors.white,
+                                            size: 30,
+                                          ),
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 6,
+                                    ),
+                                    child: ListTile(
+                                      contentPadding: const EdgeInsets.all(15),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(6),
+                                        side: BorderSide(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.primary,
+                                          width: 0.5,
+                                        ),
+                                      ),
+                                      leading: Consumer(
+                                        builder: (context, ref, child) {
+                                          final isToggling = ref.watch(
+                                            isTogglingTaskProvider,
+                                          );
+                                          return Checkbox(
+                                            value: isTaskCompleted,
+                                            onChanged: isToggling
+                                                ? null
+                                                : (value) async {
+                                                    if (value != null) {
+                                                      await ref
+                                                          .read(
+                                                            taskProvider
+                                                                .notifier,
+                                                          )
+                                                          .toggleTaskCompletion(
+                                                            task.id,
+                                                            value,
+                                                          );
+                                                    }
+                                                  },
+                                            activeColor: Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
+                                          );
+                                        },
+                                      ),
+                                      title: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              taskName,
+                                              style: TextStyle(
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.onPrimary,
+                                                fontWeight: FontWeight.bold,
+                                                decoration: isTaskCompleted
+                                                    ? TextDecoration.lineThrough
+                                                    : null,
+                                              ),
+                                            ),
+                                          ),
+                                          if (isTaskCompleted)
+                                            Icon(
+                                              Icons.check_circle,
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.primary,
+                                              size: 20,
+                                            ),
+                                        ],
+                                      ),
+                                      subtitle: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          if (taskDesc.isNotEmpty)
+                                            Text(
+                                              taskDesc,
+                                              style: TextStyle(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onPrimary
+                                                    .withValues(alpha: 0.7),
+                                                decoration: isTaskCompleted
+                                                    ? TextDecoration.lineThrough
+                                                    : null,
+                                              ),
+                                            ),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 2,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .primary
+                                                      .withValues(alpha: 0.2),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                                child: Text(
+                                                  taskCategory,
+                                                  style: TextStyle(
+                                                    color: Theme.of(
+                                                      context,
+                                                    ).colorScheme.primary,
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                isTaskCompleted
+                                                    ? "Completed"
+                                                    : "Pending",
+                                                style: TextStyle(
+                                                  color: isTaskCompleted
+                                                      ? Theme.of(
+                                                          context,
+                                                        ).colorScheme.primary
+                                                      : Theme.of(context)
+                                                            .colorScheme
+                                                            .onPrimary
+                                                            .withValues(
+                                                              alpha: 0.6,
+                                                            ),
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                      trailing: IconButton(
+                                        onPressed: () {
+                                          updateExistingTask(task);
+                                        },
+                                        icon: const Icon(
+                                          Icons.edit_outlined,
+                                          color: Color(0xff38b17d),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 );
                               },
-                              icon: const Icon(
-                                Icons.edit_outlined,
-                                color: Color(0xff38b17d),
-                              ),
-                            ),
-                          ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  );
-                },
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
-        onPressed: addNewTask,
-        child: const Icon(Icons.create_outlined),
-      ),
+          ),
+          floatingActionButton: FloatingActionButton(
+            backgroundColor: Theme.of(context).colorScheme.primary,
+            foregroundColor: Theme.of(context).colorScheme.onPrimary,
+            onPressed: addNewTask,
+            child: const Icon(Icons.create_outlined),
+          ),
+        );
+      },
     );
   }
 }
