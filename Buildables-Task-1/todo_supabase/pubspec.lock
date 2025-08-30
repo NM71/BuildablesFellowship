@@ -205,14 +205,22 @@ packages:
     dependency: "direct main"
     description:
       name: connectivity_plus
+<<<<<<< HEAD
       sha256: b5e72753cf63becce2c61fd04dfe0f1c430cc5278b53a1342dc5ad839eab29ec
       url: "https://pub.dev"
     source: hosted
     version: "6.1.5"
+=======
+      sha256: "224a77051d52a11fbad53dd57827594d3bd24f945af28bd70bab376d68d437f0"
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.0.2"
+>>>>>>> 9af56fdd2de05ee373365b764867cc08af6efee4
   connectivity_plus_platform_interface:
     dependency: transitive
     description:
       name: connectivity_plus_platform_interface
+<<<<<<< HEAD
       sha256: "42657c1715d48b167930d5f34d00222ac100475f73d10162ddf43e714932f204"
       url: "https://pub.dev"
     source: hosted
@@ -225,6 +233,12 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.1.2"
+=======
+      sha256: cf1d1c28f4416f8c654d7dc3cd638ec586076255d407cef3ddbdaf178272a71a
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.4"
+>>>>>>> 9af56fdd2de05ee373365b764867cc08af6efee4
   crypto:
     dependency: transitive
     description:
@@ -241,6 +255,7 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.8"
+<<<<<<< HEAD
   custom_lint_core:
     dependency: transitive
     description:
@@ -289,6 +304,16 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.28.0"
+=======
+  dbus:
+    dependency: transitive
+    description:
+      name: dbus
+      sha256: "79e0c23480ff85dc68de79e2cd6334add97e48f7f4865d17686dd6ea81a47e8c"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.11"
+>>>>>>> 9af56fdd2de05ee373365b764867cc08af6efee4
   fake_async:
     dependency: transitive
     description:
@@ -448,6 +473,7 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.1.2"
+<<<<<<< HEAD
   io:
     dependency: transitive
     description:
@@ -456,10 +482,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.5"
+=======
+>>>>>>> 9af56fdd2de05ee373365b764867cc08af6efee4
   js:
     dependency: transitive
     description:
       name: js
+<<<<<<< HEAD
       sha256: "53385261521cc4a0c4658fd0ad07a7d14591cf8fc33abbceae306ddb974888dc"
       url: "https://pub.dev"
     source: hosted
@@ -472,6 +501,12 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.9.0"
+=======
+      sha256: f2c445dce49627136094980615a031419f7f3eb393237e4ecd97ac15dea343f3
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.6.7"
+>>>>>>> 9af56fdd2de05ee373365b764867cc08af6efee4
   jwt_decode:
     dependency: transitive
     description:
@@ -553,6 +588,17 @@ packages:
     source: hosted
     version: "2.0.0"
   nm:
+<<<<<<< HEAD
+=======
+    dependency: transitive
+    description:
+      name: nm
+      sha256: "2c9aae4127bdc8993206464fcc063611e0e36e72018696cd9631023a31b24254"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.5.0"
+  path:
+>>>>>>> 9af56fdd2de05ee373365b764867cc08af6efee4
     dependency: transitive
     description:
       name: nm
@@ -720,6 +766,7 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.6.1"
+<<<<<<< HEAD
   riverpod_analyzer_utils:
     dependency: transitive
     description:
@@ -744,6 +791,8 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.6.5"
+=======
+>>>>>>> 9af56fdd2de05ee373365b764867cc08af6efee4
   rxdart:
     dependency: transitive
     description:
@@ -853,6 +902,7 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.0"
+<<<<<<< HEAD
   sqlite3:
     dependency: transitive
     description:
@@ -877,6 +927,48 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.41.1"
+=======
+  sqflite:
+    dependency: "direct main"
+    description:
+      name: sqflite
+      sha256: e2297b1da52f127bc7a3da11439985d9b536f75070f3325e62ada69a5c585d03
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.2"
+  sqflite_android:
+    dependency: transitive
+    description:
+      name: sqflite_android
+      sha256: "2b3070c5fa881839f8b402ee4a39c1b4d561704d4ebbbcfb808a119bc2a1701b"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.1"
+  sqflite_common:
+    dependency: transitive
+    description:
+      name: sqflite_common
+      sha256: "6ef422a4525ecc601db6c0a2233ff448c731307906e92cabc9ba292afaae16a6"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.5.6"
+  sqflite_darwin:
+    dependency: transitive
+    description:
+      name: sqflite_darwin
+      sha256: "279832e5cde3fe99e8571879498c9211f3ca6391b0d818df4e17d9fff5c6ccb3"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.2"
+  sqflite_platform_interface:
+    dependency: transitive
+    description:
+      name: sqflite_platform_interface
+      sha256: "8dd4515c7bdcae0a785b0062859336de775e8c65db81ae33dd5445f35be61920"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.0"
+>>>>>>> 9af56fdd2de05ee373365b764867cc08af6efee4
   stack_trace:
     dependency: transitive
     description:
@@ -941,6 +1033,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.9.1"
+  synchronized:
+    dependency: transitive
+    description:
+      name: synchronized
+      sha256: c254ade258ec8282947a0acbbc90b9575b4f19673533ee46f2f6e9b3aeefd7c0
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.4.0"
   term_glyph:
     dependency: transitive
     description:
