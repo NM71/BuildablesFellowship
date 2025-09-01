@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:todo_supabase/widgets/bottom_navigation.dart';
+import 'package:todo_supabase/widgets/auth_wrapper.dart';
 
 void main() async {
   // supabase setup
@@ -33,7 +33,7 @@ class MyApp extends StatelessWidget {
           foregroundColor: Color(0xff38b17d),
         ),
       ),
-      home: const BottomNavigation(),
+      home: const AuthWrapper(),
     );
   }
 }

@@ -65,7 +65,9 @@ class CompactSyncStatusIndicator extends ConsumerWidget {
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: (isOnline ? Colors.green : Colors.red).withOpacity(0.3),
+            color: (isOnline ? Colors.green : Colors.red).withValues(
+              alpha: 0.3,
+            ),
             blurRadius: 4,
             spreadRadius: 1,
           ),
