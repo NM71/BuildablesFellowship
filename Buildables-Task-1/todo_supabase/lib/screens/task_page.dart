@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:todo_supabase/providers/task_provider.dart';
+import 'package:todo_supabase/providers/auth_provider.dart';
 import 'package:todo_supabase/utils/custom_appbar.dart';
+import 'package:todo_supabase/screens/task_detail_page.dart';
 
 class TaskPage extends ConsumerStatefulWidget {
   const TaskPage({super.key});
@@ -433,6 +435,14 @@ class _TaskPageState extends ConsumerState<TaskPage> {
                                           width: 0.5,
                                         ),
                                       ),
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => TaskDetailPage(task: task),
+                                          ),
+                                        );
+                                      },
                                       leading: Consumer(
                                         builder: (context, ref, child) {
                                           final isToggling = ref.watch(
@@ -533,10 +543,45 @@ class _TaskPageState extends ConsumerState<TaskPage> {
                                                 ),
                                               ),
                                               const SizedBox(width: 8),
-                                              Text(
-                                                isTaskCompleted
-                                                    ? "Completed"
-                                                    : "Pending",
+                                              
+                                              // Collaboration indicator
+                                              if (task.collaboratorCount > 0) ...[
+                                              Container(
+                                                   padding: const EdgeInsets.symmetric(
+                                                     horizontal: 6,
+                                                     vertical: 2,
+                                                   ),
+                                                   decoration: BoxDecoration(
+                                                     color: Colors.blue.withValues(alpha: 0.2),
+                                                     borderRadius: BorderRadius.circular(10),
+                                                   ),
+                                                   child: Row(
+                                                     mainAxisSize: MainAxisSize.min,
+                                                     children: [
+                                                       const Icon(
+                                                         Icons.people,
+                                                         size: 10,
+                                                         color: Colors.blue,
+                                                       ),
+                                                       const SizedBox(width: 2),
+                                                       Text(
+                                                         '${task.collaboratorCount}',
+                                                         style: const TextStyle(
+                                                           color: Colors.blue,
+                                                           fontSize: 10,
+                                                           fontWeight: FontWeight.w500,
+                                                         ),
+                                                       ),
+                                                     ],
+                                                   ),
+                                                 ),
+                                                 const SizedBox(width: 8),
+                                               ],
+
+                                               Text(
+                                                 isTaskCompleted
+                                                     ? "Completed"
+                                                     : "Pending",
                                                 style: TextStyle(
                                                   color: isTaskCompleted
                                                       ? Theme.of(

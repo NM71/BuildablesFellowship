@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../utils/custom_appbar.dart';
 import '../providers/auth_provider.dart';
+import 'pending_invitations_page.dart';
 
 // Dummy user data
 class UserProfile {
@@ -295,6 +296,19 @@ class ProfilePage extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 16),
+          _buildSettingItem(
+            icon: Icons.mail_outline,
+            title: 'Pending Invitations',
+            subtitle: 'View and manage collaboration invites',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const PendingInvitationsPage(),
+                ),
+              );
+            },
+          ),
           _buildSettingItem(
             icon: Icons.notifications,
             title: 'Notifications',

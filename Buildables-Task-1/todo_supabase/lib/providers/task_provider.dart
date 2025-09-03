@@ -2,6 +2,40 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+// Collaborator model
+class Collaborator {
+  final String userId;
+  final String email;
+  final String role;
+  final DateTime? invitedAt;
+  final DateTime? acceptedAt;
+
+  Collaborator({
+    required this.userId,
+    required this.email,
+    required this.role,
+    this.invitedAt,
+    this.acceptedAt,
+  });
+
+  factory Collaborator.fromJson(Map<String, dynamic> json) {
+    return Collaborator(
+      userId: json['user_id'] as String,
+      email: json['email'] as String,
+      role: json['role'] as String? ?? 'collaborator',
+      invitedAt: json['invited_at'] != null 
+          ? DateTime.parse(json['invited_at'] as String)
+          : null,
+      acceptedAt: json['accepted_at'] != null 
+          ? DateTime.parse(json['accepted_at'] as String)
+          : null,
+    );
+  }
+
+  bool get hasAccepted => acceptedAt != null;
+  bool get isPending => acceptedAt == null;
+}
+
 // Task model
 class Task {
   final int id;
@@ -10,6 +44,10 @@ class Task {
   final String category;
   final bool completed;
   final DateTime createdAt;
+  final DateTime? updatedAt;
+  final String ownerId;
+  final String? ownerEmail;
+  final List<Collaborator> collaborators;
 
   Task({
     required this.id,
@@ -18,9 +56,22 @@ class Task {
     required this.category,
     required this.completed,
     required this.createdAt,
+    this.updatedAt,
+    required this.ownerId,
+    this.ownerEmail,
+    this.collaborators = const [],
   });
 
   factory Task.fromJson(Map<String, dynamic> json) {
+    // Parse collaborators from JSON array (if present)
+    List<Collaborator> collaboratorsList = [];
+    if (json['collaborators'] != null) {
+      final collabData = json['collaborators'] as List;
+      collaboratorsList = collabData
+          .map((collab) => Collaborator.fromJson(collab as Map<String, dynamic>))
+          .toList();
+    }
+
     return Task(
       id: json['id'] as int,
       name: json['name'] as String,
@@ -28,6 +79,12 @@ class Task {
       category: json['category'] as String? ?? 'Other',
       completed: json['completed'] as bool? ?? false,
       createdAt: DateTime.parse(json['created_at'] as String),
+      updatedAt: json['updated_at'] != null 
+          ? DateTime.parse(json['updated_at'] as String)
+          : null,
+      ownerId: json['owner_id'] as String,
+      ownerEmail: json['owner_email'] as String?, // May be null from basic todo table
+      collaborators: collaboratorsList,
     );
   }
 
@@ -38,6 +95,10 @@ class Task {
     String? category,
     bool? completed,
     DateTime? createdAt,
+    DateTime? updatedAt,
+    String? ownerId,
+    String? ownerEmail,
+    List<Collaborator>? collaborators,
   }) {
     return Task(
       id: id ?? this.id,
@@ -46,8 +107,19 @@ class Task {
       category: category ?? this.category,
       completed: completed ?? this.completed,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      ownerId: ownerId ?? this.ownerId,
+      ownerEmail: ownerEmail ?? this.ownerEmail,
+      collaborators: collaborators ?? this.collaborators,
     );
   }
+
+  // Helper methods
+  bool isOwnedBy(String userId) => ownerId == userId;
+  bool isCollaborator(String userId) => collaborators.any((c) => c.userId == userId && c.hasAccepted);
+  bool canEdit(String userId) => isOwnedBy(userId) || isCollaborator(userId);
+  int get collaboratorCount => collaborators.where((c) => c.hasAccepted).length;
+  int get pendingInvitations => collaborators.where((c) => c.isPending).length;
 }
 
 // Loading states
@@ -92,6 +164,8 @@ class TaskNotifier extends StateNotifier<TaskState> {
   }
 
   final _supabase = Supabase.instance.client;
+  
+  String get _currentUserId => _supabase.auth.currentUser?.id ?? '';
   bool _mounted = true;
 
   void _loadTasks() {
@@ -178,6 +252,7 @@ class TaskNotifier extends StateNotifier<TaskState> {
             'description': description,
             'category': category,
             'completed': false,
+            'owner_id': _currentUserId,
           })
           .select()
           .single();
@@ -232,6 +307,7 @@ class TaskNotifier extends StateNotifier<TaskState> {
         category: category,
         completed: completed,
         createdAt: DateTime.now(),
+        ownerId: _currentUserId,
       );
 
       final updatedTasks = state.tasks.map((task) {

@@ -32,13 +32,15 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
   Future<void> _signUp() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final message = await ref.read(authProvider.notifier).signUp(
-      email: _emailController.text.trim(),
-      password: _passwordController.text.trim(),
-      fullName: _fullNameController.text.trim().isNotEmpty 
-          ? _fullNameController.text.trim() 
-          : null,
-    );
+    final message = await ref
+        .read(authProvider.notifier)
+        .signUp(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+          fullName: _fullNameController.text.trim().isNotEmpty
+              ? _fullNameController.text.trim()
+              : null,
+        );
 
     if (mounted && message != null) {
       if (message.contains('check your email')) {
@@ -46,16 +48,17 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => EmailConfirmationPage(
-              email: _emailController.text.trim(),
-            ),
+            builder: (context) =>
+                EmailConfirmationPage(email: _emailController.text.trim()),
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(message),
-            backgroundColor: message.contains('successfully') ? Colors.green : Colors.red,
+            backgroundColor: message.contains('successfully')
+                ? Colors.green
+                : Colors.red,
           ),
         );
       }
@@ -75,7 +78,7 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 40),
-              
+
               // Logo and Title
               Column(
                 children: [
@@ -104,10 +107,7 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                   const SizedBox(height: 8),
                   const Text(
                     'Sign up to start managing your tasks',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.white70,
-                    ),
+                    style: TextStyle(fontSize: 16, color: Colors.white70),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -127,7 +127,10 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                       decoration: InputDecoration(
                         labelText: 'Full Name (optional)',
                         labelStyle: const TextStyle(color: Colors.white70),
-                        prefixIcon: const Icon(Icons.person_outline, color: Colors.white70),
+                        prefixIcon: const Icon(
+                          Icons.person_outline,
+                          color: Colors.white70,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: const BorderSide(color: Colors.white30),
@@ -138,7 +141,9 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                          borderSide: BorderSide(
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                         ),
                       ),
                     ),
@@ -153,7 +158,10 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                       decoration: InputDecoration(
                         labelText: 'Email',
                         labelStyle: const TextStyle(color: Colors.white70),
-                        prefixIcon: const Icon(Icons.email_outlined, color: Colors.white70),
+                        prefixIcon: const Icon(
+                          Icons.email_outlined,
+                          color: Colors.white70,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: const BorderSide(color: Colors.white30),
@@ -164,7 +172,9 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                          borderSide: BorderSide(
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                         ),
                         errorBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -175,7 +185,9 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                         if (value == null || value.isEmpty) {
                           return 'Please enter your email';
                         }
-                        if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                        if (!RegExp(
+                          r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                        ).hasMatch(value)) {
                           return 'Please enter a valid email';
                         }
                         return null;
@@ -192,7 +204,10 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                       decoration: InputDecoration(
                         labelText: 'Password',
                         labelStyle: const TextStyle(color: Colors.white70),
-                        prefixIcon: const Icon(Icons.lock_outline, color: Colors.white70),
+                        prefixIcon: const Icon(
+                          Icons.lock_outline,
+                          color: Colors.white70,
+                        ),
                         suffixIcon: IconButton(
                           onPressed: () {
                             setState(() {
@@ -200,7 +215,9 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                             });
                           },
                           icon: Icon(
-                            _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                            _obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
                             color: Colors.white70,
                           ),
                         ),
@@ -214,7 +231,9 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                          borderSide: BorderSide(
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                         ),
                         errorBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -242,15 +261,21 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                       decoration: InputDecoration(
                         labelText: 'Confirm Password',
                         labelStyle: const TextStyle(color: Colors.white70),
-                        prefixIcon: const Icon(Icons.lock_outline, color: Colors.white70),
+                        prefixIcon: const Icon(
+                          Icons.lock_outline,
+                          color: Colors.white70,
+                        ),
                         suffixIcon: IconButton(
                           onPressed: () {
                             setState(() {
-                              _obscureConfirmPassword = !_obscureConfirmPassword;
+                              _obscureConfirmPassword =
+                                  !_obscureConfirmPassword;
                             });
                           },
                           icon: Icon(
-                            _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
+                            _obscureConfirmPassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
                             color: Colors.white70,
                           ),
                         ),
@@ -264,7 +289,9 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                          borderSide: BorderSide(
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                         ),
                         errorBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -291,7 +318,9 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                       child: ElevatedButton(
                         onPressed: authState.isLoading ? null : _signUp,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).colorScheme.primary,
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -309,7 +338,10 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                               )
                             : const Text(
                                 'Create Account',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                       ),
                     ),
@@ -328,7 +360,9 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                           onPressed: () {
                             Navigator.pushReplacement(
                               context,
-                              MaterialPageRoute(builder: (context) => const SignInPage()),
+                              MaterialPageRoute(
+                                builder: (context) => const SignInPage(),
+                              ),
                             );
                           },
                           child: Text(
@@ -351,13 +385,19 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                   margin: const EdgeInsets.only(top: 16),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
+                    color: Colors.red.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.withOpacity(0.3)),
+                    border: Border.all(
+                      color: Colors.red.withValues(alpha: 0.3),
+                    ),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.error_outline, color: Colors.red, size: 20),
+                      const Icon(
+                        Icons.error_outline,
+                        color: Colors.red,
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -366,8 +406,13 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                         ),
                       ),
                       IconButton(
-                        onPressed: () => ref.read(authProvider.notifier).clearError(),
-                        icon: const Icon(Icons.close, color: Colors.red, size: 16),
+                        onPressed: () =>
+                            ref.read(authProvider.notifier).clearError(),
+                        icon: const Icon(
+                          Icons.close,
+                          color: Colors.red,
+                          size: 16,
+                        ),
                       ),
                     ],
                   ),

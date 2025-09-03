@@ -1,0 +1,268 @@
+import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../providers/task_provider.dart';
+
+class CollaborationResult {
+  final bool success;
+  final String message;
+  final Map<String, dynamic>? data;
+
+  CollaborationResult({
+    required this.success,
+    required this.message,
+    this.data,
+  });
+
+  factory CollaborationResult.fromJson(Map<String, dynamic> json) {
+    return CollaborationResult(
+      success: json['success'] ?? false,
+      message: json['message'] ?? 'Unknown error',
+      data: json,
+    );
+  }
+}
+
+class CollaborationService {
+  static final CollaborationService _instance = CollaborationService._internal();
+  factory CollaborationService() => _instance;
+  CollaborationService._internal();
+
+  final SupabaseClient _supabase = Supabase.instance.client;
+
+  // Get current user ID
+  String get _currentUserId => _supabase.auth.currentUser?.id ?? '';
+
+  // Invite user to task by email
+  Future<CollaborationResult> inviteUserToTask({
+    required int taskId,
+    required String email,
+  }) async {
+    try {
+      if (kDebugMode) {
+        print('Inviting $email to task $taskId');
+      }
+
+      final response = await _supabase.rpc(
+        'invite_user_to_task',
+        params: {
+          'task_id_param': taskId,
+          'invitee_email': email,
+        },
+      );
+
+      if (kDebugMode) {
+        print('Invitation response: $response');
+      }
+
+      return CollaborationResult.fromJson(response as Map<String, dynamic>);
+    } catch (e) {
+      if (kDebugMode) {
+        print('Invitation error: $e');
+      }
+      return CollaborationResult(
+        success: false,
+        message: 'Failed to send invitation: ${e.toString()}',
+      );
+    }
+  }
+
+  // Accept task invitation
+  Future<CollaborationResult> acceptTaskInvitation({required int taskId}) async {
+    try {
+      if (kDebugMode) {
+        print('Accepting invitation for task $taskId');
+      }
+
+      final response = await _supabase.rpc(
+        'accept_task_invitation',
+        params: {
+          'task_id_param': taskId,
+        },
+      );
+
+      if (kDebugMode) {
+        print('Accept invitation response: $response');
+      }
+
+      return CollaborationResult.fromJson(response as Map<String, dynamic>);
+    } catch (e) {
+      if (kDebugMode) {
+        print('Accept invitation error: $e');
+      }
+      return CollaborationResult(
+        success: false,
+        message: 'Failed to accept invitation: ${e.toString()}',
+      );
+    }
+  }
+
+  // Remove collaborator from task (only task owners can do this)
+  Future<CollaborationResult> removeCollaborator({
+    required int taskId,
+    required String userId,
+  }) async {
+    try {
+      if (kDebugMode) {
+        print('Removing collaborator $userId from task $taskId');
+      }
+
+      await _supabase
+          .from('task_collaborators')
+          .delete()
+          .eq('task_id', taskId)
+          .eq('user_id', userId);
+
+      return CollaborationResult(
+        success: true,
+        message: 'Collaborator removed successfully',
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('Remove collaborator error: $e');
+      }
+      return CollaborationResult(
+        success: false,
+        message: 'Failed to remove collaborator: ${e.toString()}',
+      );
+    }
+  }
+
+  // Get task collaborators with details
+  Future<List<Collaborator>> getTaskCollaborators({required int taskId}) async {
+    try {
+      if (kDebugMode) {
+        print('Fetching collaborators for task $taskId');
+      }
+
+      final response = await _supabase
+          .from('task_collaborators')
+          .select('''
+            user_id,
+            role,
+            invited_at,
+            accepted_at,
+            user:user_id (
+              email
+            )
+          ''')
+          .eq('task_id', taskId);
+
+      if (kDebugMode) {
+        print('Collaborators response: $response');
+      }
+
+      final collaborators = (response as List).map((data) {
+        return Collaborator(
+          userId: data['user_id'] as String,
+          email: data['user']['email'] as String,
+          role: data['role'] as String? ?? 'collaborator',
+          invitedAt: data['invited_at'] != null 
+              ? DateTime.parse(data['invited_at'] as String)
+              : null,
+          acceptedAt: data['accepted_at'] != null 
+              ? DateTime.parse(data['accepted_at'] as String)
+              : null,
+        );
+      }).toList();
+
+      return collaborators;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Get collaborators error: $e');
+      }
+      return [];
+    }
+  }
+
+  // Search users by email (for invitation suggestions)
+  Future<List<Map<String, dynamic>>> searchUsersByEmail({required String query}) async {
+    try {
+      if (query.length < 3) return []; // Don't search for very short queries
+
+      if (kDebugMode) {
+        print('Searching users with email containing: $query');
+      }
+
+      final response = await _supabase.rpc(
+        'get_user_by_email',
+        params: {'user_email': query},
+      );
+
+      if (kDebugMode) {
+        print('User search response: $response');
+      }
+
+      return List<Map<String, dynamic>>.from(response ?? []);
+    } catch (e) {
+      if (kDebugMode) {
+        print('User search error: $e');
+      }
+      return [];
+    }
+  }
+
+  // Get pending invitations for current user
+  Future<List<Map<String, dynamic>>> getPendingInvitations() async {
+    try {
+      if (kDebugMode) {
+        print('Fetching pending invitations for user $_currentUserId');
+      }
+
+      final response = await _supabase
+          .from('task_collaborators')
+          .select('''
+            task_id,
+            invited_at,
+            task:task_id (
+              id,
+              name,
+              description,
+              category,
+              owner_id,
+              owner:owner_id (
+                email
+              )
+            )
+          ''')
+          .eq('user_id', _currentUserId)
+          .isFilter('accepted_at', null);
+
+      if (kDebugMode) {
+        print('Pending invitations response: $response');
+      }
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      if (kDebugMode) {
+        print('Get pending invitations error: $e');
+      }
+      return [];
+    }
+  }
+
+  // Get tasks with collaboration info (enhanced version)
+  Future<List<Task>> getTasksWithCollaborationInfo() async {
+    try {
+      if (kDebugMode) {
+        print('Fetching tasks with collaboration info');
+      }
+
+      final response = await _supabase
+          .from('tasks_with_collaborators')
+          .select()
+          .order('created_at', ascending: false);
+
+      if (kDebugMode) {
+        print('Tasks with collaboration response: $response');
+      }
+
+      final tasks = (response as List).map((json) => Task.fromJson(json)).toList();
+      return tasks;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Get tasks with collaboration error: $e');
+      }
+      return [];
+    }
+  }
+}
