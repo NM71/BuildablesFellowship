@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/task_provider.dart';
 
 class CollaborationResult {
@@ -23,7 +24,8 @@ class CollaborationResult {
 }
 
 class CollaborationService {
-  static final CollaborationService _instance = CollaborationService._internal();
+  static final CollaborationService _instance =
+      CollaborationService._internal();
   factory CollaborationService() => _instance;
   CollaborationService._internal();
 
@@ -42,11 +44,25 @@ class CollaborationService {
         print('Inviting $email to task $taskId');
       }
 
+      // First get the task data that the collaborator will need
+      final taskData = await _supabase
+          .from('tasks') // Changed from 'todo' to 'tasks'
+          .select(
+            'title, description, category, completed, created_at, updated_at, owner_id', // Changed 'name' to 'title'
+          )
+          .eq('id', taskId)
+          .single();
+
+      if (kDebugMode) {
+        print('Task data for invitation: $taskData');
+      }
+
+      // Use RPC function to create invitation
       final response = await _supabase.rpc(
-        'invite_user_to_task',
+        'invite_user_to_task', // Changed to new function name
         params: {
           'task_id_param': taskId,
-          'invitee_email': email,
+          'invitee_email_param': email, // Updated parameter name
         },
       );
 
@@ -67,7 +83,9 @@ class CollaborationService {
   }
 
   // Accept task invitation
-  Future<CollaborationResult> acceptTaskInvitation({required int taskId}) async {
+  Future<CollaborationResult> acceptTaskInvitation({
+    required int taskId,
+  }) async {
     try {
       if (kDebugMode) {
         print('Accepting invitation for task $taskId');
@@ -75,13 +93,29 @@ class CollaborationService {
 
       final response = await _supabase.rpc(
         'accept_task_invitation',
-        params: {
-          'task_id_param': taskId,
-        },
+        params: {'task_id_param': taskId},
       );
 
       if (kDebugMode) {
         print('Accept invitation response: $response');
+      }
+
+      // Force a refresh of the task list after accepting invitation
+      // This ensures the collaborator task appears immediately
+      try {
+        await Future.delayed(
+          const Duration(milliseconds: 500),
+        ); // Small delay to ensure DB is updated
+        // The real-time subscription should handle this, but we'll also trigger a manual refresh
+        if (kDebugMode) {
+          print('Invitation accepted, task list should refresh automatically');
+        }
+      } catch (refreshError) {
+        if (kDebugMode) {
+          print(
+            'Manual refresh after invitation acceptance failed: $refreshError',
+          );
+        }
       }
 
       return CollaborationResult.fromJson(response as Map<String, dynamic>);
@@ -156,10 +190,10 @@ class CollaborationService {
           userId: data['user_id'] as String,
           email: data['user']['email'] as String,
           role: data['role'] as String? ?? 'collaborator',
-          invitedAt: data['invited_at'] != null 
+          invitedAt: data['invited_at'] != null
               ? DateTime.parse(data['invited_at'] as String)
               : null,
-          acceptedAt: data['accepted_at'] != null 
+          acceptedAt: data['accepted_at'] != null
               ? DateTime.parse(data['accepted_at'] as String)
               : null,
         );
@@ -175,7 +209,9 @@ class CollaborationService {
   }
 
   // Search users by email (for invitation suggestions)
-  Future<List<Map<String, dynamic>>> searchUsersByEmail({required String query}) async {
+  Future<List<Map<String, dynamic>>> searchUsersByEmail({
+    required String query,
+  }) async {
     try {
       if (query.length < 3) return []; // Don't search for very short queries
 
@@ -208,35 +244,50 @@ class CollaborationService {
         print('Fetching pending invitations for user $_currentUserId');
       }
 
-      final response = await _supabase
-          .from('task_collaborators')
-          .select('''
-            task_id,
-            invited_at,
-            task:task_id (
-              id,
-              name,
-              description,
-              category,
-              owner_id,
-              owner:owner_id (
-                email
-              )
-            )
-          ''')
-          .eq('user_id', _currentUserId)
-          .isFilter('accepted_at', null);
+      // Use RPC function to get pending invitations
+      final response = await _supabase.rpc(
+        'get_pending_invitations', // Updated to use new function (no params needed)
+      );
 
       if (kDebugMode) {
         print('Pending invitations response: $response');
       }
 
-      return List<Map<String, dynamic>>.from(response);
+      return List<Map<String, dynamic>>.from(response ?? []);
     } catch (e) {
       if (kDebugMode) {
         print('Get pending invitations error: $e');
       }
-      return [];
+
+      // Fallback: Try direct query (might fail due to RLS)
+      try {
+        final invitationsResponse = await _supabase
+            .from('task_collaborators')
+            .select('''
+              task_id,
+              invited_at,
+              task:task_id (
+                id,
+                title,
+                description,
+                category,
+                owner_id
+              )
+            ''')
+            .eq('user_id', _currentUserId)
+            .isFilter('accepted_at', null);
+
+        if (kDebugMode) {
+          print('Fallback query result: $invitationsResponse');
+        }
+
+        return List<Map<String, dynamic>>.from(invitationsResponse);
+      } catch (fallbackError) {
+        if (kDebugMode) {
+          print('Fallback query also failed: $fallbackError');
+        }
+        return [];
+      }
     }
   }
 
@@ -256,7 +307,9 @@ class CollaborationService {
         print('Tasks with collaboration response: $response');
       }
 
-      final tasks = (response as List).map((json) => Task.fromJson(json)).toList();
+      final tasks = (response as List)
+          .map((json) => Task.fromJson(json))
+          .toList();
       return tasks;
     } catch (e) {
       if (kDebugMode) {

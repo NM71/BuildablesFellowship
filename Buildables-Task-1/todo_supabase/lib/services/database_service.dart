@@ -83,7 +83,7 @@ class DatabaseService {
 
       final taskMap = {
         'id': task.id,
-        'name': task.name,
+        'name': task.title, // Changed from task.name to task.title
         'description': task.description,
         'category': task.category,
         'completed': task.completed ? 1 : 0,
@@ -109,7 +109,7 @@ class DatabaseService {
         .map(
           (t) => {
             'id': t.id,
-            'name': t.name,
+            'name': t.title, // Changed from t.name to t.title
             'description': t.description,
             'category': t.category,
             'completed': t.completed,
@@ -141,7 +141,7 @@ class DatabaseService {
       return List.generate(maps.length, (i) {
         return Task(
           id: maps[i]['id'],
-          name: maps[i]['name'],
+          title: maps[i]['name'], // Changed from 'name' to 'title'
           description: maps[i]['description'],
           category: maps[i]['category'],
           completed: maps[i]['completed'] == 1,
@@ -163,7 +163,7 @@ class DatabaseService {
         .map(
           (json) => Task(
             id: json['id'],
-            name: json['name'],
+            title: json['name'], // Changed from 'name' to 'title'
             description: json['description'],
             category: json['category'],
             completed: json['completed'],

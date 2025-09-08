@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/task_provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/invite_user_dialog.dart';
+import '../services/collaboration_service.dart';
 
 class TaskDetailPage extends ConsumerStatefulWidget {
   final Task task;
@@ -19,6 +20,8 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   final _categoryController = TextEditingController();
   bool _isCompleted = false;
   bool _isEditing = false;
+  List<Collaborator> _collaborators = [];
+  bool _isLoadingCollaborators = false;
 
   // Predefined categories
   final List<String> categories = [
@@ -34,6 +37,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   void initState() {
     super.initState();
     _initializeFields();
+    _loadCollaborators();
   }
 
   void _initializeFields() {
@@ -41,6 +45,32 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
     _descriptionController.text = widget.task.description ?? '';
     _categoryController.text = widget.task.category;
     _isCompleted = widget.task.completed;
+  }
+
+  Future<void> _loadCollaborators() async {
+    if (!mounted) return;
+
+    setState(() {
+      _isLoadingCollaborators = true;
+    });
+
+    try {
+      final collaborators = await CollaborationService().getTaskCollaborators(
+        taskId: widget.task.id,
+      );
+      if (mounted) {
+        setState(() {
+          _collaborators = collaborators;
+          _isLoadingCollaborators = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingCollaborators = false;
+        });
+      }
+    }
   }
 
   @override
@@ -612,7 +642,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
             ],
           ),
           const SizedBox(height: 12),
-          if (widget.task.collaborators.isEmpty)
+          if (_collaborators.isEmpty)
             Text(
               'No collaborators yet',
               style: TextStyle(
@@ -621,7 +651,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
               ),
             )
           else
-            ...widget.task.collaborators.map((collaborator) {
+            ..._collaborators.map((collaborator) {
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(

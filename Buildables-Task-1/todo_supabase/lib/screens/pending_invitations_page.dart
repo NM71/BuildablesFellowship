@@ -2,15 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/collaboration_service.dart';
 import '../providers/task_provider.dart';
+import '../providers/auth_provider.dart';
 
 class PendingInvitationsPage extends ConsumerStatefulWidget {
   const PendingInvitationsPage({super.key});
 
   @override
-  ConsumerState<PendingInvitationsPage> createState() => _PendingInvitationsPageState();
+  ConsumerState<PendingInvitationsPage> createState() =>
+      _PendingInvitationsPageState();
 }
 
-class _PendingInvitationsPageState extends ConsumerState<PendingInvitationsPage> {
+class _PendingInvitationsPageState
+    extends ConsumerState<PendingInvitationsPage> {
   final _collaborationService = CollaborationService();
   List<Map<String, dynamic>> _pendingInvitations = [];
   bool _isLoading = true;
@@ -47,8 +50,10 @@ class _PendingInvitationsPageState extends ConsumerState<PendingInvitationsPage>
   }
 
   Future<void> _acceptInvitation(int taskId, String taskName) async {
-    final result = await _collaborationService.acceptTaskInvitation(taskId: taskId);
-    
+    final result = await _collaborationService.acceptTaskInvitation(
+      taskId: taskId,
+    );
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -60,21 +65,36 @@ class _PendingInvitationsPageState extends ConsumerState<PendingInvitationsPage>
       if (result.success) {
         // Refresh invitations and tasks
         _loadPendingInvitations();
+
+        // Force immediate refresh of tasks
+        await Future.delayed(const Duration(milliseconds: 100));
         ref.read(taskProvider.notifier).refreshTasks();
+
+        // Additional refresh after a short delay to ensure DB is updated
+        Future.delayed(const Duration(milliseconds: 1000), () {
+          if (mounted) {
+            ref.read(taskProvider.notifier).refreshTasks();
+          }
+        });
       }
     }
   }
 
   Future<void> _declineInvitation(int taskId) async {
+    // For declining an invitation, we need to remove the current user from collaborators
+    // Since this is a pending invitation, we need to delete the task_collaborators record
+    final currentUserId = ref.read(currentUserProvider)?.id ?? '';
     final result = await _collaborationService.removeCollaborator(
       taskId: taskId,
-      userId: '', // Current user declining their own invitation
+      userId: currentUserId,
     );
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result.success ? 'Invitation declined' : result.message),
+          content: Text(
+            result.success ? 'Invitation declined' : result.message,
+          ),
           backgroundColor: result.success ? Colors.orange : Colors.red,
         ),
       );
@@ -129,11 +149,7 @@ class _PendingInvitationsPageState extends ConsumerState<PendingInvitationsPage>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.error_outline,
-              size: 60,
-              color: Colors.red,
-            ),
+            const Icon(Icons.error_outline, size: 60, color: Colors.red),
             const SizedBox(height: 16),
             Text(
               'Error loading invitations',
@@ -167,11 +183,7 @@ class _PendingInvitationsPageState extends ConsumerState<PendingInvitationsPage>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.inbox_outlined,
-              size: 80,
-              color: Colors.white54,
-            ),
+            const Icon(Icons.inbox_outlined, size: 80, color: Colors.white54),
             const SizedBox(height: 24),
             Text(
               'No Pending Invitations',
@@ -206,12 +218,12 @@ class _PendingInvitationsPageState extends ConsumerState<PendingInvitationsPage>
   }
 
   Widget _buildInvitationCard(Map<String, dynamic> invitation) {
-    final task = invitation['task'] as Map<String, dynamic>;
-    final taskName = task['name'] as String;
-    final taskDescription = task['description'] as String?;
-    final taskCategory = task['category'] as String;
-    final taskId = task['id'] as int;
-    final ownerEmail = task['owner']?['email'] as String?;
+    // New flatter structure from database function
+    final taskName = invitation['task_name'] as String? ?? 'Unknown Task';
+    final taskDescription = invitation['task_description'] as String?;
+    final taskCategory = invitation['task_category'] as String? ?? 'Other';
+    final taskId = invitation['task_id'] as int? ?? 0;
+    final ownerEmail = invitation['owner_email'] as String?;
     final invitedAt = DateTime.parse(invitation['invited_at'] as String);
 
     return Card(
@@ -235,7 +247,9 @@ class _PendingInvitationsPageState extends ConsumerState<PendingInvitationsPage>
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.2),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -309,7 +323,9 @@ class _PendingInvitationsPageState extends ConsumerState<PendingInvitationsPage>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(

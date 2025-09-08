@@ -23,10 +23,10 @@ class Collaborator {
       userId: json['user_id'] as String,
       email: json['email'] as String,
       role: json['role'] as String? ?? 'collaborator',
-      invitedAt: json['invited_at'] != null 
+      invitedAt: json['invited_at'] != null
           ? DateTime.parse(json['invited_at'] as String)
           : null,
-      acceptedAt: json['accepted_at'] != null 
+      acceptedAt: json['accepted_at'] != null
           ? DateTime.parse(json['accepted_at'] as String)
           : null,
     );
@@ -36,10 +36,10 @@ class Collaborator {
   bool get isPending => acceptedAt == null;
 }
 
-// Task model
+// Task model - Updated for new database schema
 class Task {
   final int id;
-  final String name;
+  final String title; // Changed from 'name' to 'title'
   final String? description;
   final String category;
   final bool completed;
@@ -51,7 +51,7 @@ class Task {
 
   Task({
     required this.id,
-    required this.name,
+    required this.title, // Changed from 'name' to 'title'
     this.description,
     required this.category,
     required this.completed,
@@ -68,29 +68,31 @@ class Task {
     if (json['collaborators'] != null) {
       final collabData = json['collaborators'] as List;
       collaboratorsList = collabData
-          .map((collab) => Collaborator.fromJson(collab as Map<String, dynamic>))
+          .map(
+            (collab) => Collaborator.fromJson(collab as Map<String, dynamic>),
+          )
           .toList();
     }
 
     return Task(
       id: json['id'] as int,
-      name: json['name'] as String,
+      title: json['title'] as String, // Changed from 'name' to 'title'
       description: json['description'] as String?,
       category: json['category'] as String? ?? 'Other',
       completed: json['completed'] as bool? ?? false,
       createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: json['updated_at'] != null 
+      updatedAt: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'] as String)
           : null,
       ownerId: json['owner_id'] as String,
-      ownerEmail: json['owner_email'] as String?, // May be null from basic todo table
+      ownerEmail: json['owner_email'] as String?, // May be null
       collaborators: collaboratorsList,
     );
   }
 
   Task copyWith({
     int? id,
-    String? name,
+    String? title, // Changed from 'name' to 'title'
     String? description,
     String? category,
     bool? completed,
@@ -102,7 +104,7 @@ class Task {
   }) {
     return Task(
       id: id ?? this.id,
-      name: name ?? this.name,
+      title: title ?? this.title, // Changed from 'name' to 'title'
       description: description ?? this.description,
       category: category ?? this.category,
       completed: completed ?? this.completed,
@@ -116,10 +118,14 @@ class Task {
 
   // Helper methods
   bool isOwnedBy(String userId) => ownerId == userId;
-  bool isCollaborator(String userId) => collaborators.any((c) => c.userId == userId && c.hasAccepted);
+  bool isCollaborator(String userId) =>
+      collaborators.any((c) => c.userId == userId && c.hasAccepted);
   bool canEdit(String userId) => isOwnedBy(userId) || isCollaborator(userId);
   int get collaboratorCount => collaborators.where((c) => c.hasAccepted).length;
   int get pendingInvitations => collaborators.where((c) => c.isPending).length;
+
+  // Getter for backward compatibility
+  String get name => title;
 }
 
 // Loading states
@@ -164,7 +170,7 @@ class TaskNotifier extends StateNotifier<TaskState> {
   }
 
   final _supabase = Supabase.instance.client;
-  
+
   String get _currentUserId => _supabase.auth.currentUser?.id ?? '';
   bool _mounted = true;
 
@@ -172,46 +178,90 @@ class TaskNotifier extends StateNotifier<TaskState> {
     // Load initial tasks from Supabase
     _fetchTasks();
 
-    // Set up real-time subscription with error handling
-    try {
-      _supabase
-          .from('todo')
-          .stream(primaryKey: ['id'])
-          .order('created_at', ascending: false)
-          .listen(
-            (data) {
-              if (!_mounted) return; // Check if disposed
-              final tasks = data.map((json) => Task.fromJson(json)).toList();
-              state = state.copyWith(tasks: tasks, isLoading: false);
-            },
-            onError: (error) {
-              if (kDebugMode) {
-                print('Realtime subscription error: $error');
-              }
-              // Don't update state on error to avoid breaking the UI
-              state = state.copyWith(isLoading: false);
-            },
-          );
-    } catch (e) {
-      if (kDebugMode) {
-        print('Failed to set up realtime subscription: $e');
-      }
-      // Continue without realtime updates
-      state = state.copyWith(isLoading: false);
+    // DISABLE REAL-TIME SUBSCRIPTIONS to avoid RLS recursion
+    // Real-time will be re-enabled once RLS policies are fixed
+    if (kDebugMode) {
+      print('⚠️  Real-time subscriptions DISABLED to prevent RLS recursion');
+      print('💡 To re-enable: Fix RLS policies in Supabase dashboard');
     }
   }
 
   Future<void> _fetchTasks() async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final response = await _supabase
-          .from('todo')
+      if (kDebugMode) {
+        print('=== FETCHING TASKS FOR USER: $_currentUserId ===');
+      }
+
+      // TEMPORARY WORKAROUND: Use direct queries with simple RLS policies
+      // This avoids complex RLS recursion while we fix the policies
+
+      // STEP 1: Fetch owned tasks (should work with simple policy)
+      final ownedTasksResponse = await _supabase
+          .from('tasks')
           .select()
+          .eq('owner_id', _currentUserId)
           .order('created_at', ascending: false);
 
-      final tasks = response.map((json) => Task.fromJson(json)).toList();
-      state = state.copyWith(tasks: tasks, isLoading: false);
+      if (kDebugMode) {
+        print('✅ Owned tasks: ${ownedTasksResponse.length}');
+      }
+
+      final allTasks = <Task>[];
+
+      // Add owned tasks
+      for (final taskJson in ownedTasksResponse) {
+        try {
+          allTasks.add(Task.fromJson(taskJson));
+        } catch (e) {
+          if (kDebugMode) {
+            print('❌ Error parsing owned task: $e');
+          }
+        }
+      }
+
+      // STEP 2: Fetch collaborated tasks using RPC function
+      final collabTasksResponse = await _supabase.rpc(
+        'get_user_collaborated_tasks',
+      );
+
+      if (kDebugMode) {
+        print('✅ Collaborated tasks: ${collabTasksResponse.length}');
+      }
+
+      // Add collaborated tasks
+      for (final taskJson in collabTasksResponse) {
+        try {
+          allTasks.add(Task.fromJson(taskJson));
+        } catch (e) {
+          if (kDebugMode) {
+            print('❌ Error parsing collaborated task: $e');
+          }
+        }
+      }
+
+      // Sort by creation date
+      allTasks.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      if (kDebugMode) {
+        print('📈 FINAL RESULTS:');
+        print('   - Owned tasks: ${ownedTasksResponse.length}');
+        print('   - Collaborated tasks: ${collabTasksResponse.length}');
+        print('   - Total tasks: ${allTasks.length}');
+        print('🎉 TASK LIST:');
+        for (final task in allTasks) {
+          final isOwned = task.ownerId == _currentUserId;
+          print(
+            '   - ${task.title} (ID: ${task.id}, ${isOwned ? 'OWNER' : 'COLLAB'})',
+          );
+        }
+      }
+
+      state = state.copyWith(tasks: allTasks, isLoading: false);
     } catch (e) {
+      if (kDebugMode) {
+        print(' CRITICAL ERROR in _fetchTasks: $e');
+      }
       state = state.copyWith(error: e.toString(), isLoading: false);
     }
   }
@@ -220,13 +270,8 @@ class TaskNotifier extends StateNotifier<TaskState> {
   Future<void> refreshTasks() async {
     state = state.copyWith(isRefreshing: true, error: null);
     try {
-      final response = await _supabase
-          .from('todo')
-          .select()
-          .order('created_at', ascending: false);
-
-      final tasks = response.map((json) => Task.fromJson(json)).toList();
-      state = state.copyWith(tasks: tasks, isRefreshing: false);
+      await _fetchTasks();
+      state = state.copyWith(isRefreshing: false);
     } catch (e) {
       state = state.copyWith(error: e.toString(), isRefreshing: false);
     }
@@ -246,9 +291,9 @@ class TaskNotifier extends StateNotifier<TaskState> {
 
     try {
       final response = await _supabase
-          .from('todo')
+          .from('tasks') // Changed from 'todo' to 'tasks'
           .insert({
-            'name': name,
+            'title': name, // Changed from 'name' to 'title'
             'description': description,
             'category': category,
             'completed': false,
@@ -291,9 +336,9 @@ class TaskNotifier extends StateNotifier<TaskState> {
 
     try {
       await _supabase
-          .from('todo')
+          .from('tasks') // Changed from 'todo' to 'tasks'
           .update({
-            'name': name,
+            'title': name, // Changed from 'name' to 'title'
             'description': description,
             'category': category,
             'completed': completed,
@@ -302,7 +347,7 @@ class TaskNotifier extends StateNotifier<TaskState> {
 
       final updatedTask = Task(
         id: id,
-        name: name,
+        title: name, // Changed from 'name' to 'title'
         description: description,
         category: category,
         completed: completed,
@@ -340,7 +385,7 @@ class TaskNotifier extends StateNotifier<TaskState> {
 
     try {
       await _supabase
-          .from('todo')
+          .from('tasks') // Changed from 'todo' to 'tasks'
           .update({'completed': completed})
           .eq('id', id);
 
@@ -377,7 +422,10 @@ class TaskNotifier extends StateNotifier<TaskState> {
     );
 
     try {
-      await _supabase.from('todo').delete().eq('id', id);
+      await _supabase
+          .from('tasks')
+          .delete()
+          .eq('id', id); // Changed from 'todo' to 'tasks'
 
       final updatedTasks = state.tasks.where((task) => task.id != id).toList();
       state = state.copyWith(
