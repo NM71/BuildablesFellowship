@@ -218,8 +218,8 @@ class _PendingInvitationsPageState
   }
 
   Widget _buildInvitationCard(Map<String, dynamic> invitation) {
-    // New flatter structure from database function
-    final taskName = invitation['task_name'] as String? ?? 'Unknown Task';
+    // Updated field names to match our database function
+    final taskName = invitation['task_title'] as String? ?? 'Unknown Task';
     final taskDescription = invitation['task_description'] as String?;
     final taskCategory = invitation['task_category'] as String? ?? 'Other';
     final taskId = invitation['task_id'] as int? ?? 0;

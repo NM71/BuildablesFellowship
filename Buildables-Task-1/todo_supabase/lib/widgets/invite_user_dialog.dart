@@ -6,10 +6,7 @@ import '../providers/task_provider.dart';
 class InviteUserDialog extends ConsumerStatefulWidget {
   final Task task;
 
-  const InviteUserDialog({
-    super.key,
-    required this.task,
-  });
+  const InviteUserDialog({super.key, required this.task});
 
   @override
   ConsumerState<InviteUserDialog> createState() => _InviteUserDialogState();
@@ -30,7 +27,7 @@ class _InviteUserDialogState extends ConsumerState<InviteUserDialog> {
 
   Future<void> _inviteUser() async {
     final email = _emailController.text.trim();
-    
+
     if (email.isEmpty) {
       setState(() {
         _errorMessage = 'Please enter an email address';
@@ -65,7 +62,7 @@ class _InviteUserDialogState extends ConsumerState<InviteUserDialog> {
               backgroundColor: Colors.green,
             ),
           );
-          
+
           // Refresh tasks to show updated collaboration info
           ref.read(taskProvider.notifier).refreshTasks();
         } else {
@@ -92,7 +89,9 @@ class _InviteUserDialogState extends ConsumerState<InviteUserDialog> {
     }
 
     try {
-      final results = await _collaborationService.searchUsersByEmail(query: query);
+      final results = await _collaborationService.searchUsersByEmail(
+        query: query,
+      );
       if (mounted) {
         setState(() {
           _searchResults = results;
@@ -143,7 +142,7 @@ class _InviteUserDialogState extends ConsumerState<InviteUserDialog> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    widget.task.name,
+                    widget.task.title, // Changed from name to title
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
@@ -161,10 +160,17 @@ class _InviteUserDialogState extends ConsumerState<InviteUserDialog> {
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 labelText: 'Email Address',
-                labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+                labelStyle: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.7),
+                ),
                 hintText: 'Enter collaborator\'s email',
-                hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
-                prefixIcon: const Icon(Icons.email_outlined, color: Colors.white70),
+                hintStyle: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                ),
+                prefixIcon: const Icon(
+                  Icons.email_outlined,
+                  color: Colors.white70,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: const BorderSide(color: Colors.white30),
@@ -175,7 +181,9 @@ class _InviteUserDialogState extends ConsumerState<InviteUserDialog> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                  borderSide: BorderSide(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ),
                 errorBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -198,7 +206,11 @@ class _InviteUserDialogState extends ConsumerState<InviteUserDialog> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.error_outline, color: Colors.red, size: 16),
+                    const Icon(
+                      Icons.error_outline,
+                      color: Colors.red,
+                      size: 16,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -219,7 +231,9 @@ class _InviteUserDialogState extends ConsumerState<InviteUserDialog> {
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.1),
+                  ),
                 ),
                 child: ListView.builder(
                   shrinkWrap: true,
@@ -228,12 +242,19 @@ class _InviteUserDialogState extends ConsumerState<InviteUserDialog> {
                     final user = _searchResults[index];
                     return ListTile(
                       dense: true,
-                      leading: const Icon(Icons.person, color: Colors.white70, size: 20),
+                      leading: const Icon(
+                        Icons.person,
+                        color: Colors.white70,
+                        size: 20,
+                      ),
                       title: Text(
                         user['email'] as String,
-                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                        ),
                       ),
-                      subtitle: user['full_name'] != null 
+                      subtitle: user['full_name'] != null
                           ? Text(
                               user['full_name'] as String,
                               style: TextStyle(

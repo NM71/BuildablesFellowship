@@ -501,8 +501,8 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
 
             const SizedBox(height: 24),
 
-            // Collaborators Section
-            if (widget.task.collaborators.isNotEmpty || isOwner)
+            // Collaborators Section - Always show for owners, show for others if there are collaborators
+            if (isOwner || _collaborators.isNotEmpty)
               _buildCollaboratorsSection(),
           ],
         ),

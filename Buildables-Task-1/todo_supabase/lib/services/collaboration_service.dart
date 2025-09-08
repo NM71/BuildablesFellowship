@@ -174,10 +174,7 @@ class CollaborationService {
             user_id,
             role,
             invited_at,
-            accepted_at,
-            user:user_id (
-              email
-            )
+            accepted_at
           ''')
           .eq('task_id', taskId);
 
@@ -188,7 +185,7 @@ class CollaborationService {
       final collaborators = (response as List).map((data) {
         return Collaborator(
           userId: data['user_id'] as String,
-          email: data['user']['email'] as String,
+          email: 'Loading...', // We'll get email separately if needed
           role: data['role'] as String? ?? 'collaborator',
           invitedAt: data['invited_at'] != null
               ? DateTime.parse(data['invited_at'] as String)
@@ -244,50 +241,95 @@ class CollaborationService {
         print('Fetching pending invitations for user $_currentUserId');
       }
 
-      // Use RPC function to get pending invitations
-      final response = await _supabase.rpc(
-        'get_pending_invitations', // Updated to use new function (no params needed)
-      );
+      // First try direct query to bypass any RPC issues
+      final invitationsResponse = await _supabase
+          .from('task_collaborators')
+          .select('''
+            task_id,
+            invited_at,
+            task:tasks!fk_task_collaborators_task_id (
+              id,
+              title,
+              description,
+              category,
+              owner_id
+            )
+          ''')
+          .eq('user_id', _currentUserId)
+          .isFilter('accepted_at', null);
 
       if (kDebugMode) {
-        print('Pending invitations response: $response');
+        print('Direct query result: $invitationsResponse');
       }
 
-      return List<Map<String, dynamic>>.from(response ?? []);
+      // Transform the response to match expected format
+      final List<Map<String, dynamic>> transformedResponse = [];
+
+      for (final invitation in invitationsResponse as List) {
+        final task = invitation['task'];
+
+        if (task == null) {
+          if (kDebugMode) {
+            print(
+              'Task join failed for task_id: ${invitation['task_id']}, trying fallback query',
+            );
+          }
+
+          // Fallback: Get task data directly
+          try {
+            final taskData = await _supabase
+                .from('tasks')
+                .select('title, description, category, owner_id')
+                .eq('id', invitation['task_id'])
+                .single();
+
+            if (kDebugMode) {
+              print('Fallback task data: $taskData');
+            }
+
+            transformedResponse.add({
+              'task_id': invitation['task_id'],
+              'task_title': taskData['title'] ?? 'Unknown Task',
+              'task_description': taskData['description'] ?? '',
+              'task_category': taskData['category'] ?? 'Other',
+              'owner_email': 'Task Owner',
+              'invited_at': invitation['invited_at'],
+            });
+          } catch (fallbackError) {
+            if (kDebugMode) {
+              print('Fallback query also failed: $fallbackError');
+            }
+            transformedResponse.add({
+              'task_id': invitation['task_id'],
+              'task_title': 'Task Not Found',
+              'task_description': 'The task may have been deleted',
+              'task_category': 'Other',
+              'owner_email': 'Unknown',
+              'invited_at': invitation['invited_at'],
+            });
+          }
+        } else {
+          transformedResponse.add({
+            'task_id': invitation['task_id'],
+            'task_title': task['title'] ?? 'Unknown Task',
+            'task_description': task['description'] ?? '',
+            'task_category': task['category'] ?? 'Other',
+            'owner_email': 'Task Owner',
+            'invited_at': invitation['invited_at'],
+          });
+        }
+      }
+
+      if (kDebugMode) {
+        print('Transformed invitations: $transformedResponse');
+      }
+
+      return transformedResponse;
     } catch (e) {
       if (kDebugMode) {
         print('Get pending invitations error: $e');
       }
-
-      // Fallback: Try direct query (might fail due to RLS)
-      try {
-        final invitationsResponse = await _supabase
-            .from('task_collaborators')
-            .select('''
-              task_id,
-              invited_at,
-              task:task_id (
-                id,
-                title,
-                description,
-                category,
-                owner_id
-              )
-            ''')
-            .eq('user_id', _currentUserId)
-            .isFilter('accepted_at', null);
-
-        if (kDebugMode) {
-          print('Fallback query result: $invitationsResponse');
-        }
-
-        return List<Map<String, dynamic>>.from(invitationsResponse);
-      } catch (fallbackError) {
-        if (kDebugMode) {
-          print('Fallback query also failed: $fallbackError');
-        }
-        return [];
-      }
+      return [];
     }
   }
 

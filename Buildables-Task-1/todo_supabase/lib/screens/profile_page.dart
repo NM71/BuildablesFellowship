@@ -1,51 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../utils/custom_appbar.dart';
 import '../providers/auth_provider.dart';
+import '../providers/task_provider.dart';
 import 'pending_invitations_page.dart';
-
-// Dummy user data
-class UserProfile {
-  final String name;
-  final String email;
-  final String avatarUrl;
-  final String bio;
-  final int totalTasks;
-  final int completedTasks;
-  final DateTime joinDate;
-
-  const UserProfile({
-    required this.name,
-    required this.email,
-    required this.avatarUrl,
-    required this.bio,
-    required this.totalTasks,
-    required this.completedTasks,
-    required this.joinDate,
-  });
-
-  int get pendingTasks => totalTasks - completedTasks;
-  double get completionRate =>
-      totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
-}
-
-// Dummy user data
-final dummyUser = UserProfile(
-  name: 'John Doe',
-  email: 'john.doe@example.com',
-  avatarUrl: 'https://via.placeholder.com/150',
-  bio:
-      'Productivity enthusiast and task management lover. Always striving to stay organized and achieve my goals!',
-  totalTasks: 47,
-  completedTasks: 32,
-  joinDate: DateTime(2024, 1, 15),
-);
 
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final currentUser = ref.watch(currentUserProvider);
+    final taskState = ref.watch(taskProvider);
+    final pendingTasks = ref.watch(pendingTasksProvider);
+    final completedTasks = ref.watch(completedTasksProvider);
+
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -58,17 +28,24 @@ class ProfilePage extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     // Profile Header
-                    _buildProfileHeader(),
+                    _buildProfileHeader(currentUser),
 
                     const SizedBox(height: 30),
 
                     // Stats Cards
-                    _buildStatsGrid(),
+                    _buildStatsGrid(
+                      taskState.tasks.length,
+                      completedTasks.length,
+                    ),
 
                     const SizedBox(height: 30),
 
                     // Profile Info
-                    _buildProfileInfo(),
+                    _buildProfileInfo(
+                      currentUser,
+                      taskState.tasks.length,
+                      completedTasks.length,
+                    ),
 
                     const SizedBox(height: 30),
 
@@ -84,7 +61,7 @@ class ProfilePage extends ConsumerWidget {
     );
   }
 
-  Widget _buildProfileHeader() {
+  Widget _buildProfileHeader(User? currentUser) {
     return Column(
       children: [
         // Avatar
@@ -95,21 +72,9 @@ class ProfilePage extends ConsumerWidget {
             shape: BoxShape.circle,
             border: Border.all(color: const Color(0xff38b17d), width: 3),
           ),
-          child: ClipOval(
-            child: Image.network(
-              dummyUser.avatarUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  color: const Color(0xff38b17d).withValues(alpha: 0.2),
-                  child: const Icon(
-                    Icons.person,
-                    size: 60,
-                    color: Color(0xff38b17d),
-                  ),
-                );
-              },
-            ),
+          child: Container(
+            color: const Color(0xff38b17d).withValues(alpha: 0.2),
+            child: const Icon(Icons.person, size: 60, color: Color(0xff38b17d)),
           ),
         ),
 
@@ -117,7 +82,7 @@ class ProfilePage extends ConsumerWidget {
 
         // Name
         Text(
-          dummyUser.name,
+          currentUser?.email?.split('@').first ?? 'User',
           style: const TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
@@ -129,7 +94,7 @@ class ProfilePage extends ConsumerWidget {
 
         // Email
         Text(
-          dummyUser.email,
+          currentUser?.email ?? 'No email',
           style: TextStyle(
             fontSize: 16,
             color: Colors.white.withValues(alpha: 0.7),
@@ -138,35 +103,31 @@ class ProfilePage extends ConsumerWidget {
 
         const SizedBox(height: 16),
 
-        // Bio
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-          ),
-          child: Text(
-            dummyUser.bio,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              height: 1.5,
-            ),
-          ),
-        ),
+        // // Bio
+        // Container(
+        //   padding: const EdgeInsets.all(16),
+        //   decoration: BoxDecoration(
+        //     color: Colors.white.withValues(alpha: 0.05),
+        //     borderRadius: BorderRadius.circular(12),
+        //     border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        //   ),
+        //   child: const Text(
+        //     'Productivity enthusiast and task management lover. Always striving to stay organized and achieve my goals!',
+        //     textAlign: TextAlign.center,
+        //     style: TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
+        //   ),
+        // ),
       ],
     );
   }
 
-  Widget _buildStatsGrid() {
+  Widget _buildStatsGrid(int totalTasks, int completedTasks) {
     return Row(
       children: [
         Expanded(
           child: _buildStatCard(
             title: 'Total Tasks',
-            value: dummyUser.totalTasks.toString(),
+            value: totalTasks.toString(),
             icon: Icons.assignment,
             color: const Color(0xff38b17d),
           ),
@@ -175,7 +136,7 @@ class ProfilePage extends ConsumerWidget {
         Expanded(
           child: _buildStatCard(
             title: 'Completed',
-            value: dummyUser.completedTasks.toString(),
+            value: completedTasks.toString(),
             icon: Icons.check_circle,
             color: Colors.green,
           ),
@@ -219,7 +180,16 @@ class ProfilePage extends ConsumerWidget {
     );
   }
 
-  Widget _buildProfileInfo() {
+  Widget _buildProfileInfo(
+    User? currentUser,
+    int totalTasks,
+    int completedTasks,
+  ) {
+    final pendingTasks = totalTasks - completedTasks;
+    final completionRate = totalTasks > 0
+        ? (completedTasks / totalTasks) * 100
+        : 0;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -239,12 +209,12 @@ class ProfilePage extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 16),
-          _buildInfoRow('Member since', _formatDate(dummyUser.joinDate)),
+          _buildInfoRow('Account', currentUser?.email ?? 'No email'),
           _buildInfoRow(
             'Completion rate',
-            '${dummyUser.completionRate.toStringAsFixed(1)}%',
+            '${completionRate.toStringAsFixed(1)}%',
           ),
-          _buildInfoRow('Pending tasks', dummyUser.pendingTasks.toString()),
+          _buildInfoRow('Pending tasks', pendingTasks.toString()),
         ],
       ),
     );
@@ -315,24 +285,24 @@ class ProfilePage extends ConsumerWidget {
             subtitle: 'Manage task reminders',
             onTap: () {},
           ),
-          _buildSettingItem(
-            icon: Icons.palette,
-            title: 'Theme',
-            subtitle: 'Customize app appearance',
-            onTap: () {},
-          ),
-          _buildSettingItem(
-            icon: Icons.backup,
-            title: 'Backup & Sync',
-            subtitle: 'Manage data synchronization',
-            onTap: () {},
-          ),
-          _buildSettingItem(
-            icon: Icons.help,
-            title: 'Help & Support',
-            subtitle: 'Get help and contact support',
-            onTap: () {},
-          ),
+          // _buildSettingItem(
+          //   icon: Icons.palette,
+          //   title: 'Theme',
+          //   subtitle: 'Customize app appearance',
+          //   onTap: () {},
+          // ),
+          // _buildSettingItem(
+          //   icon: Icons.backup,
+          //   title: 'Backup & Sync',
+          //   subtitle: 'Manage data synchronization',
+          //   onTap: () {},
+          // ),
+          // _buildSettingItem(
+          //   icon: Icons.help,
+          //   title: 'Help & Support',
+          //   subtitle: 'Get help and contact support',
+          //   onTap: () {},
+          // ),
           const SizedBox(height: 16),
           // Sign Out Button
           SizedBox(
@@ -357,7 +327,7 @@ class ProfilePage extends ConsumerWidget {
                     ],
                   ),
                 );
-                
+
                 if (shouldSignOut == true) {
                   await ref.read(authProvider.notifier).signOut();
                 }
