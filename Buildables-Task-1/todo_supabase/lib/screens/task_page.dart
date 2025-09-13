@@ -4,6 +4,8 @@ import 'package:todo_supabase/providers/task_provider.dart';
 import 'package:todo_supabase/providers/auth_provider.dart';
 import 'package:todo_supabase/utils/custom_appbar.dart';
 import 'package:todo_supabase/screens/task_detail_page.dart';
+import 'package:todo_supabase/widgets/file_attachment_widget.dart';
+import 'package:todo_supabase/services/file_service.dart';
 
 class TaskPage extends ConsumerStatefulWidget {
   const TaskPage({super.key});
@@ -17,6 +19,7 @@ class _TaskPageState extends ConsumerState<TaskPage> {
   final descController = TextEditingController();
   final categoryController = TextEditingController();
   bool isCompleted = false;
+  List<FileAttachment> _attachments = [];
 
   // Predefined categories
   final List<String> categories = [
@@ -40,6 +43,7 @@ class _TaskPageState extends ConsumerState<TaskPage> {
     textController.clear();
     descController.clear();
     categoryController.clear();
+    _attachments.clear();
 
     showDialog(
       context: context,
@@ -49,38 +53,119 @@ class _TaskPageState extends ConsumerState<TaskPage> {
 
           return AlertDialog(
             title: const Text("Add New Task"),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: textController,
-                  decoration: const InputDecoration(labelText: "Task name"),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: descController,
-                  decoration: const InputDecoration(
-                    labelText: "Description (optional)",
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: textController,
+                    decoration: const InputDecoration(labelText: "Task name"),
                   ),
-                  maxLines: 2,
-                ),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  value: categoryController.text.isEmpty
-                      ? null
-                      : categoryController.text,
-                  decoration: const InputDecoration(labelText: "Category"),
-                  items: categories.map((category) {
-                    return DropdownMenuItem(
-                      value: category,
-                      child: Text(category),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    categoryController.text = value ?? '';
-                  },
-                ),
-              ],
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: descController,
+                    decoration: const InputDecoration(
+                      labelText: "Description (optional)",
+                    ),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    value: categoryController.text.isEmpty
+                        ? null
+                        : categoryController.text,
+                    decoration: const InputDecoration(labelText: "Category"),
+                    items: categories.map((category) {
+                      return DropdownMenuItem(
+                        value: category,
+                        child: Text(category),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      categoryController.text = value ?? '';
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  // File Attachments Section
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Attachments (${_attachments.length})',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        if (_attachments.isNotEmpty)
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: _attachments.map((attachment) {
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue[100],
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      FileService.instance.getFileIcon(
+                                        attachment.fileType,
+                                      ),
+                                      size: 16,
+                                      color: Colors.blue[800],
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      attachment.fileName.length > 20
+                                          ? '${attachment.fileName.substring(0, 20)}...'
+                                          : attachment.fileName,
+                                      style: TextStyle(
+                                        color: Colors.blue[800],
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          _attachments.remove(attachment);
+                                        });
+                                      },
+                                      child: Icon(
+                                        Icons.close,
+                                        size: 14,
+                                        color: Colors.blue[800],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        const SizedBox(height: 8),
+                        FileAttachmentWidget(
+                          onFileSelected: _onFileAttached,
+                          showProgress: false,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
             actions: [
               TextButton(
@@ -309,6 +394,18 @@ class _TaskPageState extends ConsumerState<TaskPage> {
     }
   }
 
+  void _onFileAttached(FileAttachment attachment) {
+    setState(() {
+      _attachments.add(attachment);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('File "${attachment.fileName}" attached successfully'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer(
@@ -439,7 +536,8 @@ class _TaskPageState extends ConsumerState<TaskPage> {
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (context) => TaskDetailPage(task: task),
+                                            builder: (context) =>
+                                                TaskDetailPage(task: task),
                                           ),
                                         );
                                       },
@@ -543,45 +641,53 @@ class _TaskPageState extends ConsumerState<TaskPage> {
                                                 ),
                                               ),
                                               const SizedBox(width: 8),
-                                              
-                                              // Collaboration indicator
-                                              if (task.collaboratorCount > 0) ...[
-                                              Container(
-                                                   padding: const EdgeInsets.symmetric(
-                                                     horizontal: 6,
-                                                     vertical: 2,
-                                                   ),
-                                                   decoration: BoxDecoration(
-                                                     color: Colors.blue.withValues(alpha: 0.2),
-                                                     borderRadius: BorderRadius.circular(10),
-                                                   ),
-                                                   child: Row(
-                                                     mainAxisSize: MainAxisSize.min,
-                                                     children: [
-                                                       const Icon(
-                                                         Icons.people,
-                                                         size: 10,
-                                                         color: Colors.blue,
-                                                       ),
-                                                       const SizedBox(width: 2),
-                                                       Text(
-                                                         '${task.collaboratorCount}',
-                                                         style: const TextStyle(
-                                                           color: Colors.blue,
-                                                           fontSize: 10,
-                                                           fontWeight: FontWeight.w500,
-                                                         ),
-                                                       ),
-                                                     ],
-                                                   ),
-                                                 ),
-                                                 const SizedBox(width: 8),
-                                               ],
 
-                                               Text(
-                                                 isTaskCompleted
-                                                     ? "Completed"
-                                                     : "Pending",
+                                              // Collaboration indicator
+                                              if (task.collaboratorCount >
+                                                  0) ...[
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 2,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.blue
+                                                        .withValues(alpha: 0.2),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          10,
+                                                        ),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      const Icon(
+                                                        Icons.people,
+                                                        size: 10,
+                                                        color: Colors.blue,
+                                                      ),
+                                                      const SizedBox(width: 2),
+                                                      Text(
+                                                        '${task.collaboratorCount}',
+                                                        style: const TextStyle(
+                                                          color: Colors.blue,
+                                                          fontSize: 10,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                              ],
+
+                                              Text(
+                                                isTaskCompleted
+                                                    ? "Completed"
+                                                    : "Pending",
                                                 style: TextStyle(
                                                   color: isTaskCompleted
                                                       ? Theme.of(

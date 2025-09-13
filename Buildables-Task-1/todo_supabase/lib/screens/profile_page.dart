@@ -103,20 +103,20 @@ class ProfilePage extends ConsumerWidget {
 
         const SizedBox(height: 16),
 
-        // // Bio
-        // Container(
-        //   padding: const EdgeInsets.all(16),
-        //   decoration: BoxDecoration(
-        //     color: Colors.white.withValues(alpha: 0.05),
-        //     borderRadius: BorderRadius.circular(12),
-        //     border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-        //   ),
-        //   child: const Text(
-        //     'Productivity enthusiast and task management lover. Always striving to stay organized and achieve my goals!',
-        //     textAlign: TextAlign.center,
-        //     style: TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
-        //   ),
-        // ),
+        // Bio
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          ),
+          child: const Text(
+            'Productivity enthusiast and task management lover. Always striving to stay organized and achieve my goals!',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
+          ),
+        ),
       ],
     );
   }
@@ -285,24 +285,24 @@ class ProfilePage extends ConsumerWidget {
             subtitle: 'Manage task reminders',
             onTap: () {},
           ),
-          // _buildSettingItem(
-          //   icon: Icons.palette,
-          //   title: 'Theme',
-          //   subtitle: 'Customize app appearance',
-          //   onTap: () {},
-          // ),
-          // _buildSettingItem(
-          //   icon: Icons.backup,
-          //   title: 'Backup & Sync',
-          //   subtitle: 'Manage data synchronization',
-          //   onTap: () {},
-          // ),
-          // _buildSettingItem(
-          //   icon: Icons.help,
-          //   title: 'Help & Support',
-          //   subtitle: 'Get help and contact support',
-          //   onTap: () {},
-          // ),
+          _buildSettingItem(
+            icon: Icons.palette,
+            title: 'Theme',
+            subtitle: 'Customize app appearance',
+            onTap: () {},
+          ),
+          _buildSettingItem(
+            icon: Icons.backup,
+            title: 'Backup & Sync',
+            subtitle: 'Manage data synchronization',
+            onTap: () {},
+          ),
+          _buildSettingItem(
+            icon: Icons.help,
+            title: 'Help & Support',
+            subtitle: 'Get help and contact support',
+            onTap: () {},
+          ),
           const SizedBox(height: 16),
           // Sign Out Button
           SizedBox(

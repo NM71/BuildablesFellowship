@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/file_service.dart';
 
 // Collaborator model
 class Collaborator {
@@ -48,6 +49,7 @@ class Task {
   final String ownerId;
   final String? ownerEmail;
   final List<Collaborator> collaborators;
+  final List<FileAttachment> attachments;
 
   Task({
     required this.id,
@@ -60,6 +62,7 @@ class Task {
     required this.ownerId,
     this.ownerEmail,
     this.collaborators = const [],
+    this.attachments = const [],
   });
 
   factory Task.fromJson(Map<String, dynamic> json) {
@@ -101,6 +104,7 @@ class Task {
     String? ownerId,
     String? ownerEmail,
     List<Collaborator>? collaborators,
+    List<FileAttachment>? attachments,
   }) {
     return Task(
       id: id ?? this.id,
@@ -113,6 +117,7 @@ class Task {
       ownerId: ownerId ?? this.ownerId,
       ownerEmail: ownerEmail ?? this.ownerEmail,
       collaborators: collaborators ?? this.collaborators,
+      attachments: attachments ?? this.attachments,
     );
   }
 

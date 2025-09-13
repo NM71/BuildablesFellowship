@@ -4,6 +4,9 @@ import '../providers/task_provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/invite_user_dialog.dart';
 import '../services/collaboration_service.dart';
+import '../widgets/file_attachment_widget.dart';
+import '../widgets/file_thumbnail.dart';
+import '../services/file_service.dart';
 
 class TaskDetailPage extends ConsumerStatefulWidget {
   final Task task;
@@ -504,6 +507,11 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
             // Collaborators Section - Always show for owners, show for others if there are collaborators
             if (isOwner || _collaborators.isNotEmpty)
               _buildCollaboratorsSection(),
+
+            const SizedBox(height: 24),
+
+            // File Attachments Section
+            _buildAttachmentsSection(),
           ],
         ),
       ),
@@ -691,6 +699,150 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildAttachmentsSection() {
+    final currentUser = ref.watch(currentUserProvider);
+    final canEdit = widget.task.canEdit(currentUser?.id ?? '');
+    final attachments = widget.task.attachments;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Attachments',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              if (canEdit)
+                Text(
+                  '${attachments.length}',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (attachments.isEmpty)
+            Column(
+              children: [
+                Text(
+                  'No attachments yet',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (canEdit)
+                  FileAttachmentWidget(
+                    onFileSelected: _onFileAttached,
+                    taskId: widget.task.id.toString(),
+                  ),
+              ],
+            )
+          else
+            Column(
+              children: [
+                // Display existing attachments
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: attachments.map((attachment) {
+                    return FileThumbnail(
+                      attachment: attachment,
+                      onDelete: canEdit
+                          ? () => _deleteAttachment(attachment)
+                          : null,
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+                if (canEdit)
+                  FileAttachmentWidget(
+                    onFileSelected: _onFileAttached,
+                    taskId: widget.task.id.toString(),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _onFileAttached(FileAttachment attachment) {
+    // For now, just show a success message
+    // In a real implementation, you would update the task with the new attachment
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('File "${attachment.fileName}" attached successfully'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  Future<void> _deleteAttachment(FileAttachment attachment) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: Text(
+          'Delete Attachment',
+          style: const TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          'Are you sure you want to delete "${attachment.fileName}"?',
+          style: const TextStyle(color: Colors.white),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete == true) {
+      final success = await FileService.instance.deleteFile(attachment.fileUrl);
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Attachment "${attachment.fileName}" deleted'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // In a real implementation, you would update the task to remove the attachment
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to delete attachment'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   String _formatDateTime(DateTime dateTime) {
