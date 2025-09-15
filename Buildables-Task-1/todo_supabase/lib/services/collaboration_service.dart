@@ -39,9 +39,15 @@ class CollaborationService {
     required int taskId,
     required String email,
   }) async {
+    if (kDebugMode) {
+      print('👥 [COLLABORATION] ===== STARTING USER INVITATION =====');
+      print('👥 [COLLABORATION] Task ID: $taskId');
+      print('👥 [COLLABORATION] Invitee Email: $email');
+    }
+
     try {
       if (kDebugMode) {
-        print('Inviting $email to task $taskId');
+        print('👥 [COLLABORATION] Step 1: Fetching task data...');
       }
 
       // First get the task data that the collaborator will need
@@ -54,7 +60,8 @@ class CollaborationService {
           .single();
 
       if (kDebugMode) {
-        print('Task data for invitation: $taskData');
+        print('👥 [COLLABORATION] Task data retrieved: $taskData');
+        print('👥 [COLLABORATION] Step 2: Calling invite_user_to_task RPC...');
       }
 
       // Use RPC function to create invitation
@@ -67,13 +74,14 @@ class CollaborationService {
       );
 
       if (kDebugMode) {
-        print('Invitation response: $response');
+        print('👥 [COLLABORATION] RPC response: $response');
+        print('👥 [COLLABORATION] Invitation process completed');
       }
 
       return CollaborationResult.fromJson(response as Map<String, dynamic>);
     } catch (e) {
       if (kDebugMode) {
-        print('Invitation error: $e');
+        print('❌ [COLLABORATION] Invitation error: $e');
       }
       return CollaborationResult(
         success: false,
@@ -86,9 +94,17 @@ class CollaborationService {
   Future<CollaborationResult> acceptTaskInvitation({
     required int taskId,
   }) async {
+    if (kDebugMode) {
+      print('👥 [COLLABORATION] ===== ACCEPTING TASK INVITATION =====');
+      print('👥 [COLLABORATION] Task ID: $taskId');
+      print('👥 [COLLABORATION] Current User: $_currentUserId');
+    }
+
     try {
       if (kDebugMode) {
-        print('Accepting invitation for task $taskId');
+        print(
+          '👥 [COLLABORATION] Step 1: Calling accept_task_invitation RPC...',
+        );
       }
 
       final response = await _supabase.rpc(
@@ -97,7 +113,8 @@ class CollaborationService {
       );
 
       if (kDebugMode) {
-        print('Accept invitation response: $response');
+        print('👥 [COLLABORATION] RPC response: $response');
+        print('👥 [COLLABORATION] Step 2: Waiting for database update...');
       }
 
       // Force a refresh of the task list after accepting invitation
@@ -108,7 +125,8 @@ class CollaborationService {
         ); // Small delay to ensure DB is updated
         // The real-time subscription should handle this, but we'll also trigger a manual refresh
         if (kDebugMode) {
-          print('Invitation accepted, task list should refresh automatically');
+          print('👥 [COLLABORATION] Database update delay completed');
+          print('👥 [COLLABORATION] Invitation acceptance process completed');
         }
       } catch (refreshError) {
         if (kDebugMode) {
@@ -121,7 +139,7 @@ class CollaborationService {
       return CollaborationResult.fromJson(response as Map<String, dynamic>);
     } catch (e) {
       if (kDebugMode) {
-        print('Accept invitation error: $e');
+        print('❌ [COLLABORATION] Accept invitation error: $e');
       }
       return CollaborationResult(
         success: false,
@@ -165,36 +183,107 @@ class CollaborationService {
   Future<List<Collaborator>> getTaskCollaborators({required int taskId}) async {
     try {
       if (kDebugMode) {
-        print('Fetching collaborators for task $taskId');
+        print('👥 [COLLABORATION] Fetching collaborators for task $taskId');
+        print('👥 [COLLABORATION] Current user: $_currentUserId');
       }
 
-      final response = await _supabase
+      // First get collaborators without join (avoids FK constraint issues)
+      // Include ALL collaborators regardless of acceptance status
+      final collaboratorsResponse = await _supabase
           .from('task_collaborators')
-          .select('''
-            user_id,
-            role,
-            invited_at,
-            accepted_at
-          ''')
+          .select('user_id, role, invited_at, accepted_at')
           .eq('task_id', taskId);
 
       if (kDebugMode) {
-        print('Collaborators response: $response');
+        print(
+          '👥 [COLLABORATION] Checking task_collaborators table for task $taskId',
+        );
+        print('👥 [COLLABORATION] All records in task_collaborators:');
+
+        // Debug: Check all records in task_collaborators for this task
+        try {
+          final allRecords = await _supabase
+              .from('task_collaborators')
+              .select('*');
+          print(
+            '👥 [COLLABORATION] All task_collaborators records: $allRecords',
+          );
+
+          // Check records specifically for this task
+          final taskRecords = await _supabase
+              .from('task_collaborators')
+              .select('*')
+              .eq('task_id', taskId);
+          print('👥 [COLLABORATION] Records for task $taskId: $taskRecords');
+        } catch (debugError) {
+          print('👥 [COLLABORATION] Could not fetch all records: $debugError');
+        }
       }
 
-      final collaborators = (response as List).map((data) {
-        return Collaborator(
-          userId: data['user_id'] as String,
-          email: 'Loading...', // We'll get email separately if needed
-          role: data['role'] as String? ?? 'collaborator',
-          invitedAt: data['invited_at'] != null
-              ? DateTime.parse(data['invited_at'] as String)
-              : null,
-          acceptedAt: data['accepted_at'] != null
-              ? DateTime.parse(data['accepted_at'] as String)
-              : null,
+      if (kDebugMode) {
+        print(
+          '👥 [COLLABORATION] Collaborators response: $collaboratorsResponse',
         );
-      }).toList();
+        print(
+          '👥 [COLLABORATION] Response type: ${collaboratorsResponse.runtimeType}',
+        );
+        print(
+          '👥 [COLLABORATION] Response length: ${(collaboratorsResponse as List?)?.length ?? 'null'}',
+        );
+      }
+
+      final collaborators = <Collaborator>[];
+
+      for (final collabData in collaboratorsResponse as List) {
+        final userId = collabData['user_id'] as String;
+
+        // Get user email using RPC function
+        String email = 'Unknown User';
+        try {
+          final userResponse = await _supabase.rpc(
+            'get_user_by_id',
+            params: {'user_id_param': userId},
+          );
+
+          if (userResponse != null && (userResponse as List).isNotEmpty) {
+            final userData = userResponse[0] as Map<String, dynamic>;
+            email =
+                userData['email'] as String? ??
+                userData['full_name'] as String? ??
+                'Unknown User';
+          }
+
+          if (kDebugMode) {
+            print('👥 [COLLABORATION] User $userId email: $email');
+          }
+        } catch (userError) {
+          if (kDebugMode) {
+            print(
+              '👥 [COLLABORATION] Could not fetch user data for $userId: $userError',
+            );
+          }
+        }
+
+        collaborators.add(
+          Collaborator(
+            userId: userId,
+            email: email,
+            role: collabData['role'] as String? ?? 'collaborator',
+            invitedAt: collabData['invited_at'] != null
+                ? DateTime.parse(collabData['invited_at'] as String)
+                : null,
+            acceptedAt: collabData['accepted_at'] != null
+                ? DateTime.parse(collabData['accepted_at'] as String)
+                : null,
+          ),
+        );
+      }
+
+      if (kDebugMode) {
+        print(
+          '👥 [COLLABORATION] Final collaborators list: ${collaborators.length} items',
+        );
+      }
 
       return collaborators;
     } catch (e) {
@@ -209,11 +298,22 @@ class CollaborationService {
   Future<List<Map<String, dynamic>>> searchUsersByEmail({
     required String query,
   }) async {
+    if (kDebugMode) {
+      print('👥 [COLLABORATION] ===== SEARCHING USERS BY EMAIL =====');
+      print('👥 [COLLABORATION] Query: "$query"');
+      print('👥 [COLLABORATION] Query length: ${query.length}');
+    }
+
     try {
-      if (query.length < 3) return []; // Don't search for very short queries
+      if (query.length < 3) {
+        if (kDebugMode) {
+          print('👥 [COLLABORATION] Query too short, returning empty list');
+        }
+        return []; // Don't search for very short queries
+      }
 
       if (kDebugMode) {
-        print('Searching users with email containing: $query');
+        print('👥 [COLLABORATION] Step 1: Calling get_user_by_email RPC...');
       }
 
       final response = await _supabase.rpc(
@@ -222,13 +322,18 @@ class CollaborationService {
       );
 
       if (kDebugMode) {
-        print('User search response: $response');
+        print('👥 [COLLABORATION] RPC response: $response');
+        print('👥 [COLLABORATION] Response type: ${response.runtimeType}');
+        if (response is List) {
+          print('👥 [COLLABORATION] Response length: ${response.length}');
+        }
+        print('👥 [COLLABORATION] User search completed');
       }
 
       return List<Map<String, dynamic>>.from(response ?? []);
     } catch (e) {
       if (kDebugMode) {
-        print('User search error: $e');
+        print('❌ [COLLABORATION] User search error: $e');
       }
       return [];
     }

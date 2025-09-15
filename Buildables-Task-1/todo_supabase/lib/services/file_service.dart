@@ -26,11 +26,17 @@ class FileAttachment {
   });
 
   factory FileAttachment.fromJson(Map<String, dynamic> json) {
+    if (kDebugMode) {
+      print('📎 [FILE_ATTACHMENT] Parsing attachment JSON: $json');
+    }
+
     return FileAttachment(
-      id: json['id'] as String,
-      fileName: json['file_name'] as String,
-      fileUrl: json['file_url'] as String,
-      fileType: json['file_type'] as String,
+      id: json['id'].toString(),
+      // Handle both database format (filename, file_path, content_type)
+      // and JSON format (file_name, file_url, file_type)
+      fileName: json['filename'] as String? ?? json['file_name'] as String,
+      fileUrl: json['file_path'] as String? ?? json['file_url'] as String,
+      fileType: json['content_type'] as String? ?? json['file_type'] as String,
       fileSize: json['file_size'] as int,
       uploadedAt: DateTime.parse(json['uploaded_at'] as String),
       uploadedBy: json['uploaded_by'] as String,
@@ -233,12 +239,36 @@ class FileService {
     }
   }
 
-  // Upload file to Supabase Storage
+  // Upload file to Supabase Storage and save metadata to database
   Future<FileAttachment?> uploadFile(XFile file, {String? taskId}) async {
+    if (kDebugMode) {
+      print('📎 [FILE_SERVICE] ===== STARTING FILE UPLOAD =====');
+      print(
+        '📎 [FILE_SERVICE] File: ${file.name}, Path: ${file.path}, Size: ${await file.length()} bytes',
+      );
+      print('📎 [FILE_SERVICE] Task ID: $taskId');
+    }
+
     try {
+      if (kDebugMode) {
+        print('📎 [FILE_SERVICE] Step 1: Validating file...');
+      }
+
       // Validate file
       final fileType = await _getFileType(file);
       final fileSize = await file.length();
+
+      if (kDebugMode) {
+        print(
+          '📎 [FILE_SERVICE] File validation: type=$fileType, size=$fileSize bytes',
+        );
+        print(
+          '📎 [FILE_SERVICE] File type valid: ${_isValidFileType(fileType)}',
+        );
+        print(
+          '📎 [FILE_SERVICE] File size valid: ${_isValidFileSize(fileSize)}',
+        );
+      }
 
       if (!_isValidFileType(fileType)) {
         throw Exception('File type not supported: $fileType');
@@ -248,6 +278,14 @@ class FileService {
         throw Exception(
           'File size too large. Maximum size is ${maxFileSize ~/ (1024 * 1024)}MB',
         );
+      }
+
+      if (kDebugMode) {
+        print('📎 [FILE_SERVICE] Step 2: File validation passed');
+      }
+
+      if (kDebugMode) {
+        print('📎 [FILE_SERVICE] Step 3: Generating unique filename...');
       }
 
       // Generate unique file name
@@ -260,11 +298,18 @@ class FileService {
           : 'general-files/$uniqueFileName';
 
       if (kDebugMode) {
-        print('Uploading file to: $uploadPath');
+        print('📎 [FILE_SERVICE] Upload path: $uploadPath');
+        print('📎 [FILE_SERVICE] Step 4: Reading file bytes...');
       }
 
       // Upload file to Supabase Storage
       final fileBytes = await file.readAsBytes();
+
+      if (kDebugMode) {
+        print('📎 [FILE_SERVICE] File bytes read: ${fileBytes.length} bytes');
+        print('📎 [FILE_SERVICE] Step 5: Uploading to Supabase Storage...');
+      }
+
       final uploadResponse = await _supabase.storage
           .from('task-attachments')
           .uploadBinary(
@@ -273,8 +318,16 @@ class FileService {
             fileOptions: FileOptions(contentType: fileType, upsert: false),
           );
 
+      if (kDebugMode) {
+        print('📎 [FILE_SERVICE] Upload response: $uploadResponse');
+      }
+
       if (uploadResponse.isEmpty) {
         throw Exception('Failed to upload file');
+      }
+
+      if (kDebugMode) {
+        print('📎 [FILE_SERVICE] Step 6: Getting public URL...');
       }
 
       // Get public URL
@@ -282,9 +335,47 @@ class FileService {
           .from('task-attachments')
           .getPublicUrl(uploadPath);
 
+      if (kDebugMode) {
+        print('📎 [FILE_SERVICE] Public URL: $fileUrl');
+      }
+
+      // Save metadata to database if taskId is provided
+      String? attachmentId;
+      if (taskId != null) {
+        try {
+          final dbResponse = await _supabase
+              .from('task_attachments')
+              .insert({
+                'task_id': int.parse(taskId),
+                'filename': file.name,
+                'file_path': fileUrl,
+                'file_size': fileSize,
+                'content_type': fileType,
+                'uploaded_by': _currentUserId,
+              })
+              .select()
+              .single();
+
+          // Use the returned ID from database (auto-generated bigint)
+          attachmentId = dbResponse['id'].toString();
+
+          if (kDebugMode) {
+            print('Attachment metadata saved to database: $dbResponse');
+          }
+        } catch (dbError) {
+          if (kDebugMode) {
+            print('Failed to save attachment metadata to database: $dbError');
+          }
+          // Continue with the attachment creation even if DB save fails
+          // The file is already uploaded to storage
+        }
+      }
+
       // Create file attachment record
       final attachment = FileAttachment(
-        id: _uuid.v4(),
+        id:
+            attachmentId ??
+            _uuid.v4(), // Use DB ID if available, otherwise generate UUID
         fileName: file.name,
         fileUrl: fileUrl,
         fileType: fileType,
@@ -434,9 +525,19 @@ class FileService {
     }
   }
 
-  // Delete file from Supabase Storage
-  Future<bool> deleteFile(String fileUrl) async {
+  // Delete file from Supabase Storage and database
+  Future<bool> deleteFile(String fileUrl, {String? attachmentId}) async {
+    if (kDebugMode) {
+      print('📎 [FILE_SERVICE] ===== STARTING FILE DELETION =====');
+      print('📎 [FILE_SERVICE] File URL: $fileUrl');
+      print('📎 [FILE_SERVICE] Attachment ID: $attachmentId');
+    }
+
     try {
+      if (kDebugMode) {
+        print('📎 [FILE_SERVICE] Step 1: Extracting file path from URL...');
+      }
+
       // Extract file path from URL
       final uri = Uri.parse(fileUrl);
       final pathSegments = uri.pathSegments;
@@ -444,16 +545,61 @@ class FileService {
           .sublist(pathSegments.indexOf('task-attachments') + 1)
           .join('/');
 
-      await _supabase.storage.from('task-attachments').remove([filePath]);
+      if (kDebugMode) {
+        print('📎 [FILE_SERVICE] Extracted file path: $filePath');
+        print('📎 [FILE_SERVICE] Step 2: Deleting from Supabase Storage...');
+      }
+
+      // Delete from storage
+      final storageResponse = await _supabase.storage
+          .from('task-attachments')
+          .remove([filePath]);
 
       if (kDebugMode) {
-        print('File deleted successfully: $filePath');
+        print('📎 [FILE_SERVICE] Storage deletion response: $storageResponse');
+      }
+
+      // Delete from database if attachmentId is provided
+      if (attachmentId != null) {
+        if (kDebugMode) {
+          print('📎 [FILE_SERVICE] Step 3: Deleting metadata from database...');
+        }
+
+        try {
+          final dbResponse = await _supabase
+              .from('task_attachments')
+              .delete()
+              .eq('id', attachmentId)
+              .select();
+
+          if (kDebugMode) {
+            print('📎 [FILE_SERVICE] Database deletion response: $dbResponse');
+            print('Attachment metadata deleted from database: $attachmentId');
+          }
+        } catch (dbError) {
+          if (kDebugMode) {
+            print(
+              'Failed to delete attachment metadata from database: $dbError',
+            );
+          }
+          // Continue even if DB deletion fails
+        }
+      } else {
+        if (kDebugMode) {
+          print(
+            '📎 [FILE_SERVICE] No attachment ID provided, skipping database deletion',
+          );
+        }
+      }
+
+      if (kDebugMode) {
+        print('📎 [FILE_SERVICE] File deletion completed successfully');
       }
 
       return true;
     } catch (e) {
       if (kDebugMode) {
-        print('Error deleting file: $e');
+        print('❌ [FILE_SERVICE] Error deleting file: $e');
       }
       return false;
     }

@@ -66,6 +66,10 @@ class Task {
   });
 
   factory Task.fromJson(Map<String, dynamic> json) {
+    if (kDebugMode) {
+      print('🔍 [TASK] Parsing task JSON: $json');
+    }
+
     // Parse collaborators from JSON array (if present)
     List<Collaborator> collaboratorsList = [];
     if (json['collaborators'] != null) {
@@ -77,19 +81,51 @@ class Task {
           .toList();
     }
 
+    // Parse attachments from JSON array (if present)
+    List<FileAttachment> attachmentsList = [];
+    if (json['attachments'] != null) {
+      final attachmentsData = json['attachments'] as List;
+      attachmentsList = attachmentsData
+          .map(
+            (attachment) =>
+                FileAttachment.fromJson(attachment as Map<String, dynamic>),
+          )
+          .toList();
+    }
+
+    // Handle null values safely
+    final title = json['title'] as String? ?? 'Untitled Task';
+    final createdAtString = json['created_at'] as String?;
+    final ownerIdString = json['owner_id'] as String?;
+
+    if (createdAtString == null) {
+      if (kDebugMode) {
+        print('❌ [TASK] created_at is null for task ${json['id']}');
+      }
+      throw Exception('Task created_at cannot be null');
+    }
+
+    if (ownerIdString == null) {
+      if (kDebugMode) {
+        print('❌ [TASK] owner_id is null for task ${json['id']}');
+      }
+      throw Exception('Task owner_id cannot be null');
+    }
+
     return Task(
       id: json['id'] as int,
-      title: json['title'] as String, // Changed from 'name' to 'title'
+      title: title,
       description: json['description'] as String?,
       category: json['category'] as String? ?? 'Other',
       completed: json['completed'] as bool? ?? false,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: DateTime.parse(createdAtString),
       updatedAt: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'] as String)
           : null,
-      ownerId: json['owner_id'] as String,
-      ownerEmail: json['owner_email'] as String?, // May be null
+      ownerId: ownerIdString,
+      ownerEmail: json['owner_email'] as String?,
       collaborators: collaboratorsList,
+      attachments: attachmentsList,
     );
   }
 
@@ -196,15 +232,32 @@ class TaskNotifier extends StateNotifier<TaskState> {
     try {
       if (kDebugMode) {
         print('=== FETCHING TASKS FOR USER: $_currentUserId ===');
+        print(
+          '🔍 Current auth state: ${Supabase.instance.client.auth.currentUser}',
+        );
+        print(
+          '🔍 Current session: ${Supabase.instance.client.auth.currentSession}',
+        );
       }
 
       // TEMPORARY WORKAROUND: Use direct queries with simple RLS policies
       // This avoids complex RLS recursion while we fix the policies
 
-      // STEP 1: Fetch owned tasks (should work with simple policy)
+      // STEP 1: Fetch owned tasks with attachments (should work with simple policy)
       final ownedTasksResponse = await _supabase
           .from('tasks')
-          .select()
+          .select('''
+            *,
+            task_attachments (
+              id,
+              filename,
+              file_path,
+              file_size,
+              content_type,
+              uploaded_by,
+              uploaded_at
+            )
+          ''')
           .eq('owner_id', _currentUserId)
           .order('created_at', ascending: false);
 
@@ -214,7 +267,7 @@ class TaskNotifier extends StateNotifier<TaskState> {
 
       final allTasks = <Task>[];
 
-      // Add owned tasks
+      // Add owned tasks with attachments
       for (final taskJson in ownedTasksResponse) {
         try {
           allTasks.add(Task.fromJson(taskJson));
@@ -225,7 +278,7 @@ class TaskNotifier extends StateNotifier<TaskState> {
         }
       }
 
-      // STEP 2: Fetch collaborated tasks using RPC function
+      // STEP 2: Fetch collaborated tasks with attachments using RPC function
       final collabTasksResponse = await _supabase.rpc(
         'get_user_collaborated_tasks',
       );
@@ -234,10 +287,30 @@ class TaskNotifier extends StateNotifier<TaskState> {
         print('✅ Collaborated tasks: ${collabTasksResponse.length}');
       }
 
-      // Add collaborated tasks
+      // Add collaborated tasks with attachments
       for (final taskJson in collabTasksResponse) {
         try {
-          allTasks.add(Task.fromJson(taskJson));
+          // For collaborated tasks, we need to load attachments separately
+          final taskId = taskJson['id'] as int;
+          final attachmentsResponse = await _supabase
+              .from('task_attachments')
+              .select()
+              .eq('task_id', taskId);
+
+          final attachments = (attachmentsResponse as List)
+              .map((json) => FileAttachment.fromJson(json))
+              .toList();
+
+          // Add attachments to task JSON
+          final taskWithAttachments = {
+            ...(taskJson as Map<String, dynamic>),
+            'attachments': attachments
+                .map((a) => a.toJson())
+                .cast<Map<String, dynamic>>()
+                .toList(),
+          };
+
+          allTasks.add(Task.fromJson(taskWithAttachments));
         } catch (e) {
           if (kDebugMode) {
             print('❌ Error parsing collaborated task: $e');
@@ -288,6 +361,12 @@ class TaskNotifier extends StateNotifier<TaskState> {
     String? description,
     required String category,
   }) async {
+    if (kDebugMode) {
+      print(
+        '📝 [TASK_PROVIDER] Creating task: name="$name", desc="$description", category="$category"',
+      );
+    }
+
     state = state.copyWith(
       isLoading: true,
       currentOperation: TaskOperation.create,
@@ -295,17 +374,27 @@ class TaskNotifier extends StateNotifier<TaskState> {
     );
 
     try {
+      final taskData = {
+        'title': name, // Changed from 'name' to 'title'
+        'description': description,
+        'category': category,
+        'completed': false,
+        'owner_id': _currentUserId,
+      };
+
+      if (kDebugMode) {
+        print('📝 [TASK_PROVIDER] Inserting task data: $taskData');
+      }
+
       final response = await _supabase
           .from('tasks') // Changed from 'todo' to 'tasks'
-          .insert({
-            'title': name, // Changed from 'name' to 'title'
-            'description': description,
-            'category': category,
-            'completed': false,
-            'owner_id': _currentUserId,
-          })
+          .insert(taskData)
           .select()
           .single();
+
+      if (kDebugMode) {
+        print('📝 [TASK_PROVIDER] Task created successfully: $response');
+      }
 
       final newTask = Task.fromJson(response);
       final updatedTasks = [newTask, ...state.tasks];
@@ -314,8 +403,19 @@ class TaskNotifier extends StateNotifier<TaskState> {
         isLoading: false,
         currentOperation: null,
       );
+
+      if (kDebugMode) {
+        print(
+          '📝 [TASK_PROVIDER] Task added to state. Total tasks: ${updatedTasks.length}',
+        );
+      }
+
       return 'Task "${newTask.name}" added successfully';
     } catch (e) {
+      if (kDebugMode) {
+        print('❌ [TASK_PROVIDER] Failed to create task: $e');
+      }
+
       state = state.copyWith(
         isLoading: false,
         currentOperation: null,
@@ -333,6 +433,13 @@ class TaskNotifier extends StateNotifier<TaskState> {
     required String category,
     required bool completed,
   }) async {
+    if (kDebugMode) {
+      print('📝 [TASK_PROVIDER] Updating task ID: $id');
+      print(
+        '📝 [TASK_PROVIDER] New values: name="$name", desc="$description", category="$category", completed=$completed',
+      );
+    }
+
     state = state.copyWith(
       isLoading: true,
       currentOperation: TaskOperation.update,
@@ -340,26 +447,29 @@ class TaskNotifier extends StateNotifier<TaskState> {
     );
 
     try {
-      await _supabase
+      final updateData = {
+        'title': name, // Changed from 'name' to 'title'
+        'description': description,
+        'category': category,
+        'completed': completed,
+      };
+
+      if (kDebugMode) {
+        print('📝 [TASK_PROVIDER] Update data: $updateData');
+      }
+
+      final response = await _supabase
           .from('tasks') // Changed from 'todo' to 'tasks'
-          .update({
-            'title': name, // Changed from 'name' to 'title'
-            'description': description,
-            'category': category,
-            'completed': completed,
-          })
-          .eq('id', id);
+          .update(updateData)
+          .eq('id', id)
+          .select()
+          .single();
 
-      final updatedTask = Task(
-        id: id,
-        title: name, // Changed from 'name' to 'title'
-        description: description,
-        category: category,
-        completed: completed,
-        createdAt: DateTime.now(),
-        ownerId: _currentUserId,
-      );
+      if (kDebugMode) {
+        print('📝 [TASK_PROVIDER] Task updated successfully: $response');
+      }
 
+      final updatedTask = Task.fromJson(response);
       final updatedTasks = state.tasks.map((task) {
         return task.id == id ? updatedTask : task;
       }).toList();
@@ -369,8 +479,19 @@ class TaskNotifier extends StateNotifier<TaskState> {
         isLoading: false,
         currentOperation: null,
       );
+
+      if (kDebugMode) {
+        print(
+          '📝 [TASK_PROVIDER] Task updated in state. Total tasks: ${updatedTasks.length}',
+        );
+      }
+
       return 'Task updated to "$name"';
     } catch (e) {
+      if (kDebugMode) {
+        print('❌ [TASK_PROVIDER] Failed to update task: $e');
+      }
+
       state = state.copyWith(
         isLoading: false,
         currentOperation: null,
@@ -382,6 +503,12 @@ class TaskNotifier extends StateNotifier<TaskState> {
 
   // Toggle completion
   Future<String> toggleTaskCompletion(int id, bool completed) async {
+    if (kDebugMode) {
+      print(
+        '📝 [TASK_PROVIDER] Toggling task completion: ID=$id, completed=$completed',
+      );
+    }
+
     state = state.copyWith(
       isLoading: true,
       currentOperation: TaskOperation.toggle,
@@ -389,13 +516,28 @@ class TaskNotifier extends StateNotifier<TaskState> {
     );
 
     try {
-      await _supabase
-          .from('tasks') // Changed from 'todo' to 'tasks'
-          .update({'completed': completed})
-          .eq('id', id);
+      final updateData = {'completed': completed};
 
+      if (kDebugMode) {
+        print('📝 [TASK_PROVIDER] Toggle update data: $updateData');
+      }
+
+      final response = await _supabase
+          .from('tasks') // Changed from 'todo' to 'tasks'
+          .update(updateData)
+          .eq('id', id)
+          .select()
+          .single();
+
+      if (kDebugMode) {
+        print(
+          '📝 [TASK_PROVIDER] Task completion toggled successfully: $response',
+        );
+      }
+
+      final updatedTask = Task.fromJson(response);
       final updatedTasks = state.tasks.map((task) {
-        return task.id == id ? task.copyWith(completed: completed) : task;
+        return task.id == id ? updatedTask : task;
       }).toList();
 
       state = state.copyWith(
@@ -403,8 +545,17 @@ class TaskNotifier extends StateNotifier<TaskState> {
         isLoading: false,
         currentOperation: null,
       );
+
+      if (kDebugMode) {
+        print('📝 [TASK_PROVIDER] Task completion updated in state');
+      }
+
       return completed ? 'Task marked as completed' : 'Task marked as pending';
     } catch (e) {
+      if (kDebugMode) {
+        print('❌ [TASK_PROVIDER] Failed to toggle task completion: $e');
+      }
+
       state = state.copyWith(
         isLoading: false,
         currentOperation: null,
@@ -416,9 +567,17 @@ class TaskNotifier extends StateNotifier<TaskState> {
 
   // Delete task
   Future<String> deleteTask(int id) async {
+    if (kDebugMode) {
+      print('📝 [TASK_PROVIDER] Deleting task ID: $id');
+    }
+
     // Find task name for feedback
     final taskToDelete = state.tasks.firstWhere((task) => task.id == id);
     final taskName = taskToDelete.name;
+
+    if (kDebugMode) {
+      print('📝 [TASK_PROVIDER] Task to delete: "$taskName"');
+    }
 
     state = state.copyWith(
       isLoading: true,
@@ -427,10 +586,20 @@ class TaskNotifier extends StateNotifier<TaskState> {
     );
 
     try {
-      await _supabase
+      if (kDebugMode) {
+        print('📝 [TASK_PROVIDER] Executing delete query for task ID: $id');
+      }
+
+      final response = await _supabase
           .from('tasks')
           .delete()
-          .eq('id', id); // Changed from 'todo' to 'tasks'
+          .eq('id', id)
+          .select();
+
+      if (kDebugMode) {
+        print('📝 [TASK_PROVIDER] Delete response: $response');
+        print('📝 [TASK_PROVIDER] Task deleted successfully');
+      }
 
       final updatedTasks = state.tasks.where((task) => task.id != id).toList();
       state = state.copyWith(
@@ -438,14 +607,93 @@ class TaskNotifier extends StateNotifier<TaskState> {
         isLoading: false,
         currentOperation: null,
       );
+
+      if (kDebugMode) {
+        print(
+          '📝 [TASK_PROVIDER] Task removed from state. Remaining tasks: ${updatedTasks.length}',
+        );
+      }
+
       return 'Task "$taskName" deleted successfully';
     } catch (e) {
+      if (kDebugMode) {
+        print('❌ [TASK_PROVIDER] Failed to delete task: $e');
+      }
+
       state = state.copyWith(
         isLoading: false,
         currentOperation: null,
         error: e.toString(),
       );
       return 'Failed to delete task: ${e.toString()}';
+    }
+  }
+
+  // Add attachment to task
+  Future<String> addAttachment(int taskId, FileAttachment attachment) async {
+    try {
+      // Update the task in state with the new attachment
+      final updatedTasks = state.tasks.map((task) {
+        if (task.id == taskId) {
+          final updatedAttachments = [...task.attachments, attachment];
+          return task.copyWith(attachments: updatedAttachments);
+        }
+        return task;
+      }).toList();
+
+      state = state.copyWith(tasks: updatedTasks);
+      return 'Attachment added successfully';
+    } catch (e) {
+      return 'Failed to add attachment: ${e.toString()}';
+    }
+  }
+
+  // Remove attachment from task
+  Future<String> removeAttachment(int taskId, String attachmentId) async {
+    try {
+      // Update the task in state by removing the attachment
+      final updatedTasks = state.tasks.map((task) {
+        if (task.id == taskId) {
+          final updatedAttachments = task.attachments
+              .where((attachment) => attachment.id != attachmentId)
+              .toList();
+          return task.copyWith(attachments: updatedAttachments);
+        }
+        return task;
+      }).toList();
+
+      state = state.copyWith(tasks: updatedTasks);
+      return 'Attachment removed successfully';
+    } catch (e) {
+      return 'Failed to remove attachment: ${e.toString()}';
+    }
+  }
+
+  // Load attachments for a specific task
+  Future<void> loadTaskAttachments(int taskId) async {
+    try {
+      final attachmentsResponse = await _supabase
+          .from('task_attachments')
+          .select()
+          .eq('task_id', taskId);
+
+      final attachments = (attachmentsResponse as List)
+          .map((json) => FileAttachment.fromJson(json))
+          .toList();
+
+      // Update the task in state with loaded attachments
+      final updatedTasks = state.tasks.map((task) {
+        if (task.id == taskId) {
+          return task.copyWith(attachments: attachments);
+        }
+        return task;
+      }).toList();
+
+      state = state.copyWith(tasks: updatedTasks);
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error loading attachments for task $taskId: $e');
+      }
     }
   }
 

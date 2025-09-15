@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/task_provider.dart';
@@ -41,6 +42,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
     super.initState();
     _initializeFields();
     _loadCollaborators();
+    _loadAttachments();
   }
 
   void _initializeFields() {
@@ -74,6 +76,10 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
         });
       }
     }
+  }
+
+  Future<void> _loadAttachments() async {
+    await ref.read(taskProvider.notifier).loadTaskAttachments(widget.task.id);
   }
 
   @override
@@ -787,8 +793,22 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   }
 
   void _onFileAttached(FileAttachment attachment) {
-    // For now, just show a success message
-    // In a real implementation, you would update the task with the new attachment
+    if (kDebugMode) {
+      print(
+        '📎 [ATTACHMENT] File attached to task ${widget.task.id}: ${attachment.fileName}',
+      );
+      print(
+        '📎 [ATTACHMENT] Attachment details: ID=${attachment.id}, URL=${attachment.fileUrl}',
+      );
+    }
+
+    // Add attachment to the task provider
+    ref.read(taskProvider.notifier).addAttachment(widget.task.id, attachment);
+
+    if (kDebugMode) {
+      print('📎 [ATTACHMENT] Task state updated with new attachment');
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('File "${attachment.fileName}" attached successfully'),
@@ -825,15 +845,22 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
     );
 
     if (shouldDelete == true) {
-      final success = await FileService.instance.deleteFile(attachment.fileUrl);
+      final success = await FileService.instance.deleteFile(
+        attachment.fileUrl,
+        attachmentId: attachment.id,
+      );
       if (success) {
+        // Remove attachment from the task provider state
+        ref
+            .read(taskProvider.notifier)
+            .removeAttachment(widget.task.id, attachment.id);
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Attachment "${attachment.fileName}" deleted'),
             backgroundColor: Colors.green,
           ),
         );
-        // In a real implementation, you would update the task to remove the attachment
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
