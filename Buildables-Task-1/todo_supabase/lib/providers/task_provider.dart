@@ -671,28 +671,95 @@ class TaskNotifier extends StateNotifier<TaskState> {
 
   // Load attachments for a specific task
   Future<void> loadTaskAttachments(int taskId) async {
+    if (kDebugMode) {
+      print('📎 [TASK_PROVIDER] ===== LOADING ATTACHMENTS =====');
+      print('📎 [TASK_PROVIDER] Task ID: $taskId');
+      print('📎 [TASK_PROVIDER] Current state has ${state.tasks.length} tasks');
+    }
+
     try {
+      if (kDebugMode) {
+        print('📎 [TASK_PROVIDER] Querying task_attachments table...');
+      }
+
       final attachmentsResponse = await _supabase
           .from('task_attachments')
           .select()
           .eq('task_id', taskId);
 
+      if (kDebugMode) {
+        print('📎 [TASK_PROVIDER] Raw response: $attachmentsResponse');
+        print(
+          '📎 [TASK_PROVIDER] Response type: ${attachmentsResponse.runtimeType}',
+        );
+        if (attachmentsResponse is List) {
+          print(
+            '📎 [TASK_PROVIDER] Response length: ${attachmentsResponse.length}',
+          );
+        }
+      }
+
       final attachments = (attachmentsResponse as List)
           .map((json) => FileAttachment.fromJson(json))
           .toList();
 
+      if (kDebugMode) {
+        print('📎 [TASK_PROVIDER] Parsed ${attachments.length} attachments');
+        for (var i = 0; i < attachments.length; i++) {
+          print(
+            '📎 [TASK_PROVIDER] Attachment $i: ${attachments[i].fileName} (${attachments[i].fileUrl})',
+          );
+        }
+      }
+
+      // Find the task to update
+      Task? taskToUpdate;
+      try {
+        taskToUpdate = state.tasks.firstWhere((task) => task.id == taskId);
+      } catch (e) {
+        taskToUpdate = null;
+      }
+
+      if (kDebugMode) {
+        print(
+          '📎 [TASK_PROVIDER] Task to update: ${taskToUpdate?.id ?? 'NOT FOUND'}',
+        );
+        print(
+          '📎 [TASK_PROVIDER] Task currently has ${taskToUpdate?.attachments.length ?? 0} attachments',
+        );
+      }
+
       // Update the task in state with loaded attachments
       final updatedTasks = state.tasks.map((task) {
         if (task.id == taskId) {
-          return task.copyWith(attachments: attachments);
+          final updatedTask = task.copyWith(attachments: attachments);
+          if (kDebugMode) {
+            print(
+              '📎 [TASK_PROVIDER] Updated task ${task.id} with ${attachments.length} attachments',
+            );
+          }
+          return updatedTask;
         }
         return task;
       }).toList();
 
+      if (kDebugMode) {
+        print(
+          '📎 [TASK_PROVIDER] Setting new state with ${updatedTasks.length} tasks',
+        );
+      }
+
       state = state.copyWith(tasks: updatedTasks);
+
+      if (kDebugMode) {
+        print('📎 [TASK_PROVIDER] Attachment loading completed successfully');
+      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error loading attachments for task $taskId: $e');
+        print(
+          '❌ [TASK_PROVIDER] Error loading attachments for task $taskId: $e',
+        );
+        print('❌ [TASK_PROVIDER] Stack trace: ${StackTrace.current}');
       }
     }
   }

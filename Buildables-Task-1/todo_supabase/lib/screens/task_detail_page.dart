@@ -26,6 +26,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   bool _isEditing = false;
   List<Collaborator> _collaborators = [];
   bool _isLoadingCollaborators = false;
+  bool _attachmentsLoaded = false;
 
   // Predefined categories
   final List<String> categories = [
@@ -40,6 +41,18 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   @override
   void initState() {
     super.initState();
+    if (kDebugMode) {
+      print('📱 [TASK_DETAIL] ===== INIT STATE =====');
+      print('📱 [TASK_DETAIL] Task ID: ${widget.task.id}');
+      print('📱 [TASK_DETAIL] Task Name: ${widget.task.name}');
+      print(
+        '📱 [TASK_DETAIL] Initial attachments: ${widget.task.attachments.length}',
+      );
+      print(
+        '📱 [TASK_DETAIL] Collaborators: ${widget.task.collaborators.length}',
+      );
+    }
+
     _initializeFields();
     _loadCollaborators();
     _loadAttachments();
@@ -55,6 +68,22 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   Future<void> _loadCollaborators() async {
     if (!mounted) return;
 
+    // Check if collaborators are already loaded and cached
+    if (_collaborators.isNotEmpty) {
+      if (kDebugMode) {
+        print(
+          '👥 [TASK_DETAIL] Collaborators already cached (${_collaborators.length} items), skipping reload',
+        );
+      }
+      return;
+    }
+
+    if (kDebugMode) {
+      print(
+        '👥 [TASK_DETAIL] Loading collaborators for task ${widget.task.id}',
+      );
+    }
+
     setState(() {
       _isLoadingCollaborators = true;
     });
@@ -63,6 +92,11 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
       final collaborators = await CollaborationService().getTaskCollaborators(
         taskId: widget.task.id,
       );
+
+      if (kDebugMode) {
+        print('👥 [TASK_DETAIL] Loaded ${collaborators.length} collaborators');
+      }
+
       if (mounted) {
         setState(() {
           _collaborators = collaborators;
@@ -70,6 +104,10 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
         });
       }
     } catch (e) {
+      if (kDebugMode) {
+        print('❌ [TASK_DETAIL] Error loading collaborators: $e');
+      }
+
       if (mounted) {
         setState(() {
           _isLoadingCollaborators = false;
@@ -79,7 +117,33 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   }
 
   Future<void> _loadAttachments() async {
+    // Check if attachments are already loaded and cached
+    if (_attachmentsLoaded) {
+      if (kDebugMode) {
+        print('📎 [TASK_DETAIL] Attachments already cached, skipping reload');
+      }
+      return;
+    }
+
+    if (kDebugMode) {
+      print('📎 [TASK_DETAIL] Loading attachments for task ${widget.task.id}');
+      print(
+        '📎 [TASK_DETAIL] Current task attachments before load: ${widget.task.attachments.length}',
+      );
+    }
+
     await ref.read(taskProvider.notifier).loadTaskAttachments(widget.task.id);
+
+    if (kDebugMode) {
+      print('📎 [TASK_DETAIL] Attachment loading completed');
+    }
+
+    // Mark attachments as loaded to prevent re-loading
+    if (mounted) {
+      setState(() {
+        _attachmentsLoaded = true;
+      });
+    }
   }
 
   @override
@@ -185,8 +249,18 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (kDebugMode) {
+      print('📱 [TASK_DETAIL] ===== BUILD METHOD =====');
+      print('📱 [TASK_DETAIL] Building UI for task ${widget.task.id}');
+    }
+
     final currentUser = ref.watch(currentUserProvider);
     final taskState = ref.watch(taskProvider);
+
+    if (kDebugMode) {
+      print('📱 [TASK_DETAIL] Current user: ${currentUser?.id}');
+      print('📱 [TASK_DETAIL] Task state has ${taskState.tasks.length} tasks');
+    }
 
     // Find the current task from the provider state (for real-time updates)
     final currentTask = taskState.tasks.firstWhere(
@@ -194,8 +268,28 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
       orElse: () => widget.task, // Fallback to original task if not found
     );
 
+    if (kDebugMode) {
+      print('📱 [TASK_DETAIL] Current task found: ${currentTask.id}');
+      print(
+        '📱 [TASK_DETAIL] Current task attachments: ${currentTask.attachments.length}',
+      );
+      print(
+        '📱 [TASK_DETAIL] Widget task attachments: ${widget.task.attachments.length}',
+      );
+      print(
+        '📱 [TASK_DETAIL] Using ${currentTask == widget.task ? 'widget.task' : 'provider task'}',
+      );
+      print('📱 [TASK_DETAIL] Attachments loaded flag: $_attachmentsLoaded');
+    }
+
     final isOwner = currentUser?.id == currentTask.ownerId;
     final canEdit = currentTask.canEdit(currentUser?.id ?? '');
+
+    if (kDebugMode) {
+      print(
+        '📱 [TASK_DETAIL] User permissions - Owner: $isOwner, Can Edit: $canEdit',
+      );
+    }
 
     return Scaffold(
       backgroundColor: Colors.black,
