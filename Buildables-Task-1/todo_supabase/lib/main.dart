@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:todo_supabase/widgets/auth_wrapper.dart';
+import 'package:todo_supabase/services/notification_service.dart';
 
 void main() async {
   if (kDebugMode) {
@@ -35,6 +36,16 @@ void main() async {
 
   if (kDebugMode) {
     print('✅ [MAIN] Supabase initialized successfully');
+  }
+
+  // Initialize Firebase and notifications
+  if (kDebugMode) {
+    print('🔧 [MAIN] Initializing Firebase and notifications');
+  }
+
+  await NotificationService().initialize();
+
+  if (kDebugMode) {
     print('🏃 [MAIN] Running app with ProviderScope');
   }
 

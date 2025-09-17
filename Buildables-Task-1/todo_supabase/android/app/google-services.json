@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "341277065029",
+    "project_id": "todo-supabase-notifications",
+    "storage_bucket": "todo-supabase-notifications.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:341277065029:android:582ef1ab163ebef78f882c",
+        "android_client_info": {
+          "package_name": "com.example.todo_supabase"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDbuNHw3iwph1ubeqdWJml0SUEkfrviPDk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

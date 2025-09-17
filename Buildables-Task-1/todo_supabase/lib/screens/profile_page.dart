@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../utils/custom_appbar.dart';
 import '../providers/auth_provider.dart';
 import '../providers/task_provider.dart';
+import '../services/notification_service.dart';
 import 'pending_invitations_page.dart';
 
 class ProfilePage extends ConsumerWidget {
@@ -281,9 +282,19 @@ class ProfilePage extends ConsumerWidget {
           ),
           _buildSettingItem(
             icon: Icons.notifications,
-            title: 'Notifications',
-            subtitle: 'Manage task reminders',
-            onTap: () {},
+            title: 'Test Notification',
+            subtitle: 'Send a test notification',
+            onTap: () async {
+              await NotificationService().testNotification();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Test notification sent!'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+            },
           ),
           _buildSettingItem(
             icon: Icons.palette,
