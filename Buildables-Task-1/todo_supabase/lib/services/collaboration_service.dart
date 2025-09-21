@@ -136,6 +136,17 @@ class CollaborationService {
         }
       }
 
+      // 🔔 SEND WELCOME NOTIFICATION TO NEW COLLABORATOR
+      if (kDebugMode) {
+        print(
+          '🔔 [COLLABORATION] About to send welcome notification for task $taskId',
+        );
+      }
+      await _sendWelcomeNotification(taskId);
+      if (kDebugMode) {
+        print('🔔 [COLLABORATION] Welcome notification call completed');
+      }
+
       return CollaborationResult.fromJson(response as Map<String, dynamic>);
     } catch (e) {
       if (kDebugMode) {
@@ -463,6 +474,48 @@ class CollaborationService {
         print('Get tasks with collaboration error: $e');
       }
       return [];
+    }
+  }
+
+  // 🔔 SEND WELCOME NOTIFICATION TO NEW COLLABORATOR
+  Future<void> _sendWelcomeNotification(int taskId) async {
+    try {
+      if (kDebugMode) {
+        print(
+          '🔔 [COLLABORATION] Sending welcome notification for task $taskId',
+        );
+      }
+
+      // Get task details for the notification
+      final taskResponse = await _supabase
+          .from('tasks')
+          .select('title')
+          .eq('id', taskId)
+          .single();
+
+      final taskTitle = taskResponse['title'] as String? ?? 'Task';
+
+      // Send welcome notification to the current user (who just accepted)
+      final functionResponse = await _supabase.functions.invoke(
+        'send-notification',
+        body: {
+          'title': 'Welcome to the team!',
+          'body': 'You have joined the task: $taskTitle',
+          'userId': _currentUserId,
+          'taskId': taskId.toString(),
+        },
+      );
+
+      if (kDebugMode) {
+        print(
+          '✅ [COLLABORATION] Welcome notification sent to user $_currentUserId',
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ [COLLABORATION] Failed to send welcome notification: $e');
+      }
+      // Don't throw error - notifications are not critical
     }
   }
 }
