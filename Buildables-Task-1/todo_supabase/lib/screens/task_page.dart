@@ -19,7 +19,7 @@ class _TaskPageState extends ConsumerState<TaskPage> {
   final descController = TextEditingController();
   final categoryController = TextEditingController();
   bool isCompleted = false;
-  List<FileAttachment> _attachments = [];
+  final List<FileAttachment> _attachments = [];
 
   // Predefined categories
   final List<String> categories = [

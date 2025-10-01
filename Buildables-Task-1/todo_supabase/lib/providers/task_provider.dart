@@ -486,6 +486,13 @@ class TaskNotifier extends StateNotifier<TaskState> {
         );
       }
 
+      // 🔔 SEND NOTIFICATIONS TO COLLABORATORS ABOUT TASK UPDATE
+      await _sendTaskUpdateNotifications(
+        taskId: id,
+        taskTitle: name,
+        updaterName: 'Task Owner', // Could be enhanced to show actual user name
+      );
+
       return 'Task updated to "$name"';
     } catch (e) {
       if (kDebugMode) {
@@ -549,6 +556,13 @@ class TaskNotifier extends StateNotifier<TaskState> {
       if (kDebugMode) {
         print('📝 [TASK_PROVIDER] Task completion updated in state');
       }
+
+      // 🔔 SEND NOTIFICATIONS TO COLLABORATORS ABOUT COMPLETION CHANGE
+      await _sendTaskUpdateNotifications(
+        taskId: id,
+        taskTitle: state.tasks.firstWhere((task) => task.id == id).title,
+        updaterName: 'Task Owner',
+      );
 
       return completed ? 'Task marked as completed' : 'Task marked as pending';
     } catch (e) {
@@ -761,6 +775,89 @@ class TaskNotifier extends StateNotifier<TaskState> {
         );
         print('❌ [TASK_PROVIDER] Stack trace: ${StackTrace.current}');
       }
+    }
+  }
+
+  // 🔔 SEND TASK UPDATE NOTIFICATIONS TO COLLABORATORS
+  Future<void> _sendTaskUpdateNotifications({
+    required int taskId,
+    required String taskTitle,
+    required String updaterName,
+  }) async {
+    try {
+      if (kDebugMode) {
+        print(
+          '🔔 [NOTIFICATION] Sending task update notifications for task $taskId',
+        );
+      }
+
+      // Get collaborators for this task (only accepted ones, exclude owner)
+      final collaboratorsResponse = await _supabase
+          .from('task_collaborators')
+          .select('user_id, accepted_at')
+          .eq('task_id', taskId)
+          .neq('user_id', _currentUserId); // Exclude task owner
+
+      final allCollaborators = collaboratorsResponse as List;
+
+      // Filter out collaborators who haven't accepted (accepted_at is null)
+      final collaborators = allCollaborators
+          .where((collab) => collab['accepted_at'] != null)
+          .toList();
+
+      if (kDebugMode) {
+        print(
+          '🔔 [NOTIFICATION] Found ${collaborators.length} collaborators to notify about task update',
+        );
+      }
+
+      // Send notification to each collaborator
+      for (final collab in collaborators) {
+        final userId = collab['user_id'] as String;
+
+        try {
+          if (kDebugMode) {
+            print(
+              '🔔 [NOTIFICATION] Sending task update notification to user: $userId',
+            );
+          }
+
+          // Call Edge Function to send push notification
+          final functionResponse = await _supabase.functions.invoke(
+            'send-notification',
+            body: {
+              'title': 'Task Updated',
+              'body': '$updaterName updated the task: $taskTitle',
+              'userId': userId,
+              'taskId': taskId.toString(),
+            },
+          );
+
+          if (kDebugMode) {
+            print(
+              '✅ [NOTIFICATION] Task update notification sent to user: $userId',
+            );
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            print(
+              '❌ [NOTIFICATION] Failed to send task update notification to $userId: $e',
+            );
+          }
+          // Continue with other collaborators even if one fails
+        }
+      }
+
+      if (kDebugMode) {
+        print(
+          '✅ [NOTIFICATION] Finished sending task update notifications for task $taskId',
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ [NOTIFICATION] Error sending task update notifications: $e');
+      }
+      // Don't throw error - notifications are not critical
     }
   }
 

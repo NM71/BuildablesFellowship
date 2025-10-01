@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:todo_supabase/widgets/auth_wrapper.dart';
+import 'package:http/http.dart' as http;
 import 'package:todo_supabase/services/notification_service.dart';
 
 void main() async {
@@ -28,6 +29,9 @@ void main() async {
       '🔧 [MAIN] SUPABASE_ANON_KEY: ${dotenv.env['SUPABASE_ANON_KEY'] != null ? 'Loaded' : 'Missing'}',
     );
   }
+  // Add this before Supabase.initialize()
+  final testConnection = await http.get(Uri.parse('https://google.com'));
+  print('Network test: ${testConnection.statusCode}');
 
   await Supabase.initialize(
     url: dotenv.env['SUPABASE_URL']!,

@@ -8,6 +8,7 @@ import '../services/collaboration_service.dart';
 import '../widgets/file_attachment_widget.dart';
 import '../widgets/file_thumbnail.dart';
 import '../services/file_service.dart';
+import 'collaborator_map_screen.dart';
 
 class TaskDetailPage extends ConsumerStatefulWidget {
   final Task task;
@@ -731,22 +732,45 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                   fontSize: 16,
                 ),
               ),
-              if (widget.task.isOwnedBy(
-                ref.watch(currentUserProvider)?.id ?? '',
-              ))
-                TextButton.icon(
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => InviteUserDialog(task: widget.task),
-                    );
-                  },
-                  icon: const Icon(Icons.person_add, size: 16),
-                  label: const Text('Invite'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.primary,
+              Row(
+                children: [
+                  // View on Map button
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => CollaboratorMapScreen(
+                            taskId: widget.task.id.toString(),
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.map, size: 16),
+                    label: const Text('View Map'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
-                ),
+                  if (widget.task.isOwnedBy(
+                    ref.watch(currentUserProvider)?.id ?? '',
+                  ))
+                    TextButton.icon(
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) =>
+                              InviteUserDialog(task: widget.task),
+                        );
+                      },
+                      icon: const Icon(Icons.person_add, size: 16),
+                      label: const Text('Invite'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
           const SizedBox(height: 12),
