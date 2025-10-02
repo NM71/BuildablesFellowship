@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../services/location_service.dart';
@@ -116,8 +115,8 @@ class _CollaboratorMapState extends State<CollaboratorMap> {
             circleId: userCircleId,
             center: widget.currentUserLocation!,
             radius: 50, // Default 50m accuracy circle
-            fillColor: Colors.blue.withOpacity(0.1),
-            strokeColor: Colors.blue.withOpacity(0.3),
+            fillColor: Colors.blue.withValues(alpha: 0.1),
+            strokeColor: Colors.blue.withValues(alpha: 0.3),
             strokeWidth: 2,
           ),
         );
@@ -195,8 +194,8 @@ class _CollaboratorMapState extends State<CollaboratorMap> {
             circleId: circleId,
             center: location.position,
             radius: location.accuracy!,
-            fillColor: circleColor.withOpacity(0.1),
-            strokeColor: circleColor.withOpacity(0.3),
+            fillColor: circleColor.withValues(alpha: 0.1),
+            strokeColor: circleColor.withValues(alpha: 0.3),
             strokeWidth: 1,
           ),
         );
@@ -223,7 +222,7 @@ class _CollaboratorMapState extends State<CollaboratorMap> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -272,8 +271,8 @@ class _CollaboratorMapState extends State<CollaboratorMap> {
                   height: 16,
                   decoration: BoxDecoration(
                     color: location.isOnline
-                        ? Colors.green.withOpacity(0.8)
-                        : Colors.grey.withOpacity(0.8),
+                        ? Colors.green.withValues(alpha: 0.8)
+                        : Colors.grey.withValues(alpha: 0.8),
                     shape: BoxShape.circle,
                   ),
                 ),
